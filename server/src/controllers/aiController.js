@@ -32,9 +32,8 @@ export async function askWorkspace(req, res) {
   if (!workspaceId || !prompt) return res.status(400).json({ error: 'workspaceId and prompt required' })
 
   try {
-    // For now compute a mock embedding for the prompt
+    // For now compute an embedding for the prompt
     const embedding = await (async () => {
-      // Use aiClient.embedTexts to create embedding for prompt
       const es = await (await import('../ai/aiClient.js')).embedTexts([prompt])
       return es[0]
     })()
@@ -50,5 +49,53 @@ export async function askWorkspace(req, res) {
   } catch (err) {
     logger.error({ err }, 'askWorkspace failed')
     return res.status(500).json({ error: 'ask_failed' })
+  }
+}
+
+export async function streamWorkspace(req, res) {
+  const { workspaceId, prompt } = req.body
+  if (!workspaceId || !prompt) return res.status(400).json({ error: 'workspaceId and prompt required' })
+
+  // SSE headers
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.flushHeaders?.()
+
+  // Compute embedding & fetch relevant chunks
+  try {
+    const embedding = (await (await import('../ai/aiClient.js')).embedTexts([prompt]))[0]
+    const results = await queryVectors({ workspaceId, queryEmbedding: embedding, topK: 8 })
+    const context = (results || []).map((r) => `--- [note:${r.note_id} | ver:${r.version}]\n${r.chunk_text}`).join('\n')
+
+    const promptWithContext = `Use the following notes as context:\n${context}\n\nUser question: ${prompt}`
+
+    const stream = await (await import('../ai/aiClient.js')).generateAnswerStream(promptWithContext)
+
+    // when client disconnects
+    req.on('close', () => {
+      try {
+        res.write('event: end\ndata: client_disconnected\n\n')
+      } catch (e) {
+        // ignore
+      }
+    })
+
+    for await (const chunk of stream) {
+      // Send each chunk as an SSE data event
+      res.write(`data: ${chunk}\n\n`)
+    }
+
+    // Done
+    res.write('event: end\ndata: done\n\n')
+    res.end()
+  } catch (err) {
+    logger.error({ err }, 'streamWorkspace failed')
+    try {
+      res.write(`event: error\ndata: ${JSON.stringify({ error: 'stream_failed' })}\n\n`)
+      res.end()
+    } catch (e) {
+      // noop
+    }
   }
 }

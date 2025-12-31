@@ -12,9 +12,8 @@ export async function embedTexts(texts = []) {
   }
 
   if (provider === 'gemini') {
-    // TODO: implement real Gemini embedding calls using the Gemini API client
-    logger.info('Embedding via Gemini not yet implemented')
-    throw new Error('Gemini embedding not implemented')
+    const { embedTexts: geminiEmbed } = await import('./geminiClient.js')
+    return geminiEmbed(texts)
   }
 
   throw new Error(`Unknown AI_PROVIDER=${provider}`)
@@ -30,9 +29,30 @@ export async function generateAnswer(prompt, opts = {}) {
   }
 
   if (provider === 'gemini') {
-    // TODO: implement real Gemini call (streaming support later)
-    logger.info('Gemini generate not yet implemented')
-    throw new Error('Gemini generate not implemented')
+    const { generateAnswer: geminiGenerate } = await import('./geminiClient.js')
+    return geminiGenerate(prompt, opts)
+  }
+
+  throw new Error(`Unknown AI_PROVIDER=${provider}`)
+}
+
+// Streaming interface: returns an async iterable yielding string chunks
+export async function generateAnswerStream(prompt, opts = {}) {
+  if (provider === 'mock') {
+    async function* gen() {
+      const parts = `MOCK STREAM START: ${prompt}`.split(' ')
+      for (const p of parts) {
+        await new Promise((r) => setTimeout(r, 5))
+        yield p + ' '
+      }
+      yield '\n[MOCK STREAM END]'
+    }
+    return gen()
+  }
+
+  if (provider === 'gemini') {
+    const { generateAnswerStream: geminiStream } = await import('./geminiClient.js')
+    return geminiStream(prompt, opts)
   }
 
   throw new Error(`Unknown AI_PROVIDER=${provider}`)
