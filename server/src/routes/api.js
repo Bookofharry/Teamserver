@@ -4,6 +4,8 @@ import { requireSupabaseAuth } from '../auth/supabaseAuth.js'
 import { checkEmail, clearSession, createSession, getMe, updateMe } from '../controllers/authController.js'
 import { createUpgradeIntent } from '../controllers/billingController.js'
 import { createIdempotencyMiddleware } from '../middleware/idempotency.js'
+import { requireAdmin } from '../middleware/admin.js'
+import { listAdminUsers, updateAdminUserPlan } from '../controllers/adminController.js'
 import {
   acceptInvite,
   createInvite,
@@ -19,7 +21,21 @@ import {
   updateWorkspace,
 } from '../controllers/workspacesController.js'
 import { createGroup, deleteGroup, listGroups } from '../controllers/groupsController.js'
-import { createNote, deleteNote, getPublicNote, listNotes, togglePin, updateNote, updateNotePublicStatus } from '../controllers/notesController.js'
+import {
+  createNote,
+  createNoteAttachment,
+  deleteNote,
+  deleteNoteAttachment,
+  getNoteVersion,
+  getPublicNote,
+  listNoteAttachments,
+  listNoteVersions,
+  listNotes,
+  restoreNoteVersion,
+  togglePin,
+  updateNote,
+  updateNotePublicStatus,
+} from '../controllers/notesController.js'
 
 const router = express.Router()
 
@@ -60,6 +76,9 @@ router.patch('/me', writeLimiter, updateMe)
 router.post('/upgrade-intents', writeLimiter, createUpgradeIntent)
 router.get('/invites', readLimiterDefault, listMyInvites)
 
+router.get('/admin/users', readLimiterDefault, requireAdmin, listAdminUsers)
+router.patch('/admin/users/:id/plan', writeLimiter, requireAdmin, updateAdminUserPlan)
+
 router.get('/workspaces', readLimiterLow, listWorkspaces)
 router.post('/workspaces', writeLimiter, idempotencyWorkspace, createWorkspace)
 router.patch('/workspaces/:id', writeLimiter, updateWorkspace)
@@ -79,12 +98,19 @@ router.patch('/notes/:id', writeLimiter, updateNote)
 router.post('/notes/:id/toggle-pin', writeLimiter, togglePin)
 router.patch('/notes/:id/public', writeLimiter, updateNotePublicStatus)
 router.delete('/notes/:id', writeLimiter, deleteNote)
+router.get('/notes/:id/versions', readLimiterDefault, listNoteVersions)
+router.get('/notes/:id/versions/:versionId', readLimiterDefault, getNoteVersion)
+router.post('/notes/:id/versions/:versionId/restore', writeLimiter, restoreNoteVersion)
+router.get('/notes/:id/attachments', readLimiterDefault, listNoteAttachments)
+router.post('/notes/:id/attachments', writeLimiter, createNoteAttachment)
+router.delete('/notes/:id/attachments/:attachmentId', writeLimiter, deleteNoteAttachment)
 
 // AI endpoints (scaffold)
-import { ingestNote, askWorkspace, streamWorkspace } from '../controllers/aiController.js'
+import { ingestNote, askWorkspace, streamWorkspace, debugAi } from '../controllers/aiController.js'
 
 router.post('/ai/ingest', writeLimiter, ingestNote)
 router.post('/ai/ask', readLimiterDefault, askWorkspace)
 router.post('/ai/stream', readLimiterDefault, streamWorkspace)
+router.post('/ai/debug', readLimiterDefault, debugAi)
 
 export { router as apiRouter }

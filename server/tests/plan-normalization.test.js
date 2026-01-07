@@ -4,6 +4,7 @@ import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from 'vites
 let mockSupabase
 let server
 
+// reuse mock setup from api.test.js
 const seedStore = () => {
   const now = new Date().toISOString()
   return {
@@ -17,9 +18,7 @@ const seedStore = () => {
         is_subscribed: false,
       },
     ],
-    workspaces: [
-      { id: 'ws_1', name: 'TeamPad', owner_id: 'user_1', created_at: now },
-    ],
+    workspaces: [{ id: 'ws_1', name: 'TeamPad', owner_id: 'user_1', created_at: now }],
     workspace_members: [
       {
         id: 'wm_1',
@@ -304,7 +303,7 @@ const { app } = await import('../src/app.js')
 
 const api = () => request(server)
 
-describe('API smoke tests', () => {
+describe('Plan normalization and limits', () => {
   beforeAll(() => {
     return new Promise((resolve, reject) => {
       server = app.listen(0, '127.0.0.1')
@@ -321,153 +320,39 @@ describe('API smoke tests', () => {
     mockSupabase = createMockSupabase()
   })
 
-  it('creates a session and sets an auth cookie', async () => {
-    const res = await api()
-      .post('/v1/auth/session')
-      .send({ accessToken: 'fake_token' })
-      .expect(200)
-
-    expect(res.body.data?.userId).toBe('user_1')
-    expect(res.headers['set-cookie']).toBeDefined()
-  })
-
-  it('creates a note in a workspace', async () => {
-    const res = await api()
-      .post('/v1/workspaces/ws_1/notes')
-      .send({ groupId: 'grp_1', title: 'Hello', body: 'World', tags: ['alpha'] })
-      .expect(201)
-
-    expect(res.body.data?.workspaceId).toBe('ws_1')
-    expect(res.body.data?.groupId).toBe('grp_1')
-    expect(res.body.data?.title).toBe('Hello')
-  })
-
-  it('creates a workspace invite', async () => {
-    const res = await api()
-      .post('/v1/workspaces/ws_1/invites')
-      .send({ email: 'new@teampad.io', role: 'member' })
-      .expect(201)
-
-    expect(res.body.data?.workspaceId).toBe('ws_1')
-    expect(res.body.data?.email).toBe('new@teampad.io')
-  })
-
-  it('creates a group in a workspace', async () => {
-    const res = await api()
-      .post('/v1/workspaces/ws_1/groups')
-      .send({ name: 'Design', color: '#111111' })
-      .expect(201)
-
-    expect(res.body.data?.workspaceId).toBe('ws_1')
-    expect(res.body.data?.name).toBe('Design')
-  })
-
-  it('accepts a workspace invite', async () => {
+  it('allows publishing notes when profile.plan is "premium+" (non-normalized)', async () => {
     const store = mockSupabase._store
-    store.workspace_invites.push({
-      id: 'inv_1',
+    store.profiles[0].plan = 'premium+'
+
+    // seed a note
+    store.notes.push({
+      id: 'note_1',
       workspace_id: 'ws_1',
-      email: 'alex@teampad.io',
-      role: 'member',
-      token: 'token_accept',
-      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      created_by: 'user_1',
+      group_id: 'grp_1',
+      title: 'Note',
+      body: 'Body',
+      updated_by_id: 'user_1',
       created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     })
 
-    const res = await api().post('/v1/invites/token_accept/accept').expect(200)
-
-    expect(res.body.data?.workspaceId).toBe('ws_1')
-    expect(res.body.data?.member?.role).toBe('member')
-    expect(store.workspace_invites.length).toBe(0)
+    const res = await api().patch('/v1/notes/note_1/public').send({ isPublic: true }).expect(200)
+    expect(res.body.data?.isPublic ?? res.body.data?.is_public).toBe(true)
   })
 
-  it('declines a workspace invite', async () => {
+  it('treats "premium+" as superior to premium for group limits', async () => {
     const store = mockSupabase._store
-    store.workspace_invites.push({
-      id: 'inv_2',
-      workspace_id: 'ws_1',
-      email: 'alex@teampad.io',
-      role: 'member',
-      token: 'token_decline',
-      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      created_by: 'user_1',
-      created_at: new Date().toISOString(),
-    })
-
-    const res = await api().post('/v1/invites/token_decline/decline').expect(200)
-
-    expect(res.body.data?.workspaceId).toBe('ws_1')
-    expect(res.body.data?.email).toBe('alex@teampad.io')
-    expect(store.workspace_invites.length).toBe(0)
-  })
-
-  it('removes a workspace member', async () => {
-    const store = mockSupabase._store
-    store.workspace_members.push({
-      id: 'wm_2',
-      workspace_id: 'ws_1',
-      user_id: 'user_2',
-      role: 'member',
-      created_at: new Date().toISOString(),
-    })
-
-    const res = await api().delete('/v1/workspaces/ws_1/members/user_2').expect(200)
-
-    expect(res.body.data?.workspaceId).toBe('ws_1')
-    expect(res.body.data?.userId).toBe('user_2')
-    expect(store.workspace_members.find((row) => row.user_id === 'user_2')).toBeUndefined()
-  })
-
-  it('blocks free plan from creating more than 5 collections', async () => {
-    const store = mockSupabase._store
-    store.groups.push(
-      { id: 'grp_2', workspace_id: 'ws_1', name: 'A', color: '#111111', created_at: new Date().toISOString() },
-      { id: 'grp_3', workspace_id: 'ws_1', name: 'B', color: '#111111', created_at: new Date().toISOString() },
-      { id: 'grp_4', workspace_id: 'ws_1', name: 'C', color: '#111111', created_at: new Date().toISOString() },
-      { id: 'grp_5', workspace_id: 'ws_1', name: 'D', color: '#111111', created_at: new Date().toISOString() },
-    )
-
-    const res = await api()
-      .post('/v1/workspaces/ws_1/groups')
-      .send({ name: 'Overflow', color: '#111111' })
-      .expect(403)
-
-    expect(res.body.error?.code).toBe('limit_reached')
-  })
-
-  it('blocks free plan from creating more than 8 notes in a collection', async () => {
-    const store = mockSupabase._store
-    for (let i = 0; i < 8; i += 1) {
-      store.notes.push({
-        id: `note_${i + 1}`,
-        workspace_id: 'ws_1',
-        group_id: 'grp_1',
-        title: `Note ${i + 1}`,
-        body: 'Body',
-        tags: [],
-        is_pinned: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        deleted_at: null,
-        updated_by_id: 'user_1',
-      })
+    // create 20 existing groups
+    for (let i = 0; i < 20; i++) {
+      store.groups.push({ id: `grp_extra_${i}`, workspace_id: 'ws_1', name: `G${i}`, color: '#000000', created_at: new Date().toISOString() })
     }
 
-    const res = await api()
-      .post('/v1/workspaces/ws_1/notes')
-      .send({ groupId: 'grp_1', title: 'Overflow', body: 'Body', tags: [] })
-      .expect(403)
+    // with premium plan, creating a group should be blocked
+    store.profiles[0].plan = 'premium'
+    await api().post('/v1/workspaces/ws_1/groups').send({ name: 'Too Many' }).expect(403)
 
-    expect(res.body.error?.code).toBe('limit_reached')
-  })
-
-  it('records upgrade intent and returns pending status', async () => {
-    const first = await api().post('/v1/upgrade-intents').send({ plan: 'premium', source: 'pricing' }).expect(201)
-    expect(first.body.data?.plan).toBe('premium')
-    expect(first.body.data?.alreadyPending).toBe(false)
-
-    const second = await api().post('/v1/upgrade-intents').send({ plan: 'premium', source: 'pricing' }).expect(200)
-    expect(second.body.data?.alreadyPending).toBe(true)
+    // with premium+ plan (non-normalized), creating should be allowed
+    store.profiles[0].plan = 'premium+'
+    await api().post('/v1/workspaces/ws_1/groups').send({ name: 'Allowed' }).expect(201)
   })
 })
