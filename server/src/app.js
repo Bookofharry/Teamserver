@@ -19,6 +19,7 @@ const corsBaseOptions = {
 }
 
 app.use(cors({ ...corsBaseOptions, origin: true }))
+app.options('*', cors({ ...corsBaseOptions, origin: true }))
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
