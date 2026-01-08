@@ -71,7 +71,7 @@ app.get('/', (req, res) => {
     timestamp: new Date().toISOString(),
   })
 })
-app.use('/v1', apiRouter)
+app.use('/api', apiRouter)
 app.use((err, req, res, next) => {
   const log = (req && req.log) || logger
   log.error({ err, requestId: req?.requestId }, 'Unhandled error')

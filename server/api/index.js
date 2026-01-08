@@ -1,6 +1,6 @@
-import { app } from '../../src/app.js'
-import { verifyGeminiConfigured } from '../../src/startupChecks.js'
-import logger from '../../src/utils/logger.js'
+import { app } from '../src/app.js'
+import { verifyGeminiConfigured } from '../src/startupChecks.js'
+import logger from '../src/utils/logger.js'
 
 let didVerify = false
 
@@ -25,7 +25,7 @@ export default function handler(req, res) {
   }
 
   if (req.url && req.url.startsWith('/api')) {
-    req.url = req.url.replace(/^\/api/, '')
+    req.url = req.url.replace(/^\/api/, '') || '/'
   }
 
   return app(req, res)

@@ -2,10 +2,9 @@
   "name": "server",
   "version": "1.0.0",
   "type": "module",
-  "main": "src/index.js",
   "scripts": {
-    "dev": "nodemon src/index.js",
-    "start": "node src/index.js",
+    "dev": "echo \"Vercel-only server. Use Vercel dev or deploy.\"",
+    "start": "echo \"Vercel-only server. Use Vercel dev or deploy.\"",
     "test": "vitest run"
   },
   "keywords": [],
