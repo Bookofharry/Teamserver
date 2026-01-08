@@ -8,7 +8,7 @@ import requestIdMiddleware from './middleware/requestId.js'
 
 const app = express()
 
-const defaultOrigins = ['http://localhost:8080']
+const defaultOrigins = [process.env.CORS_ORIGIN]
 const allowedOrigins = (process.env.CORS_ORIGIN || '')
   .split(',')
   .map((origin) => origin.trim())
@@ -18,6 +18,8 @@ const corsOptions = {
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-CSRF-Token'],
 }
+console.log('CORS options:', corsOptions)
+console.log('CORS allowed origins:', allowedOrigins)
 
 app.use(cors(corsOptions))
 app.use(express.json())
