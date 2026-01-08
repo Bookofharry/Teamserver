@@ -8,7 +8,7 @@ import requestIdMiddleware from './middleware/requestId.js'
 
 const app = express()
 
-const defaultOrigins = [process.env.CORS_ORIGIN]
+const defaultOrigins = ['http://localhost:8080']
 const allowedOrigins = (process.env.CORS_ORIGIN || '')
   .split(',')
   .map((origin) => origin.trim())
@@ -27,10 +27,7 @@ app.use(csrfMiddleware)
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' })
 })
-app.get('/', (req, res) => {
-  console.log('CORS options:', corsOptions)
-  console.log('CORS allowed origins:', allowedOrigins)
-
+app.get('/', (_req, res) => {
   res.json({ status: 'ok', message: 'TeamPad API is live' })
 })
 app.use('/v1', apiRouter)
