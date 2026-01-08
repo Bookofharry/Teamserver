@@ -168,13 +168,16 @@ export const checkEmail = async (req, res) => {
   }
   const supabase = getSupabaseAdmin()
   let authUserExists = false
-  const { data: authData, error: authError } = await supabase.auth.admin.getUserByEmail(email)
-  if (authError) {
-    if (!/not found/i.test(authError.message || '')) {
-      return handleSupabaseError(res, authError, 'Failed to check email')
+  const admin = supabase.auth?.admin
+  if (admin && typeof admin.getUserByEmail === 'function') {
+    const { data: authData, error: authError } = await admin.getUserByEmail(email)
+    if (authError) {
+      if (!/not found/i.test(authError.message || '')) {
+        return handleSupabaseError(res, authError, 'Failed to check email')
+      }
+    } else if (authData?.user?.id) {
+      authUserExists = true
     }
-  } else if (authData?.user?.id) {
-    authUserExists = true
   }
   const { data, error } = await supabase
     .from('profiles')
