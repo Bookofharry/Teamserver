@@ -24,6 +24,7 @@ const frontendOrigins = uniqueOrigins([
   ...parseOrigins(process.env.FRONTEND_URLS),
   ...parseOrigins(process.env.FRONTEND_URL),
   ...parseOrigins(process.env.CLIENT_URL),
+  'https://teampadwebapp.vercel.app',
   'http://localhost:8080',
   'http://localhost:5173',
   'http://localhost:5174',
