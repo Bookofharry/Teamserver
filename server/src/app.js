@@ -19,7 +19,7 @@ const corsBaseOptions = {
 }
 
 app.use(cors({ ...corsBaseOptions, origin: true }))
-app.options('*', cors({ ...corsBaseOptions, origin: true }))
+app.options(/.*/, cors({ ...corsBaseOptions, origin: true }))
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
@@ -38,6 +38,7 @@ app.get('/', (req, res) => {
   })
 })
 app.use('/api', apiRouter)
+
 app.use((err, req, res, next) => {
   const log = (req && req.log) || logger
   log.error({ err, requestId: req?.requestId }, 'Unhandled error')

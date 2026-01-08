@@ -1,15 +1,15 @@
-import logger from './utils/logger.js'
+export const verifyGeminiConfigured = () => {
+  const provider = (process.env.AI_PROVIDER || '').trim().toLowerCase()
+  const isProd = process.env.NODE_ENV === 'production'
 
-export function verifyGeminiConfigured() {
-  const provider = process.env.AI_PROVIDER || 'mock'
-  if (provider !== 'gemini') return
+  if (provider !== 'gemini' || !isProd) {
+    return
+  }
 
-  const isDev = (process.env.NODE_ENV || 'development') === 'development'
-  const url = process.env.GEMINI_API_URL
-  const key = process.env.GEMINI_API_KEY
+  const hasUrl = Boolean((process.env.GEMINI_API_URL || '').trim())
+  const hasKey = Boolean((process.env.GEMINI_API_KEY || '').trim())
 
-  if (!isDev && (!url || !key)) {
-    logger.error({ hasUrl: !!url, hasKey: !!key }, 'Gemini provider configured but credentials missing in non-development environment')
-    throw new Error('GEMINI_API_URL and GEMINI_API_KEY must be set when AI_PROVIDER=gemini in non-development environments')
+  if (!hasUrl || !hasKey) {
+    throw new Error('GEMINI_API_URL and GEMINI_API_KEY must be set when AI_PROVIDER=gemini')
   }
 }

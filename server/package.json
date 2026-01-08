@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "echo \"Vercel-only server. Use Vercel dev or deploy.\"",
-    "start": "echo \"Vercel-only server. Use Vercel dev or deploy.\"",
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
     "test": "vitest run"
   },
   "keywords": [],
