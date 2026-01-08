@@ -16,3 +16,4 @@ teampad/.env
 # Build outputs
 dist/
 build/
+teampad/
