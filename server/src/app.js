@@ -16,6 +16,7 @@ const corsBaseOptions = {
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-CSRF-Token'],
+  exposedHeaders: ['X-CSRF-Token'],
 }
 
 app.use(cors({ ...corsBaseOptions, origin: true }))

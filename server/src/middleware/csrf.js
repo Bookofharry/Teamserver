@@ -60,6 +60,10 @@ export const csrfMiddleware = (req, res, next) => {
   const csrfToken = cookies[csrfCookieName]
   const authCookie = cookies[getAuthCookieName()]
 
+  if (csrfToken) {
+    res.setHeader('X-CSRF-Token', csrfToken)
+  }
+
   if (!safe && authCookie) {
     const headerToken = req.headers['x-csrf-token']
     if (!csrfToken || !headerToken || headerToken !== csrfToken) {
@@ -72,6 +76,7 @@ export const csrfMiddleware = (req, res, next) => {
   if (!csrfToken) {
     const token = createCsrfToken()
     res.cookie(csrfCookieName, token, buildCsrfCookieOptions())
+    res.setHeader('X-CSRF-Token', token)
   }
 
   return next()
