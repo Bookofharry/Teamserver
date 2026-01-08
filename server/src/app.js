@@ -11,25 +11,6 @@ const app = express()
 
 app.set('trust proxy', true)
 
-const parseOrigins = (value = '') =>
-  value
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean)
-
-const uniqueOrigins = (origins) => Array.from(new Set(origins)).filter(Boolean)
-
-const frontendOrigins = uniqueOrigins([
-  ...parseOrigins(process.env.CORS_ORIGIN),
-  ...parseOrigins(process.env.FRONTEND_URLS),
-  ...parseOrigins(process.env.FRONTEND_URL),
-  ...parseOrigins(process.env.CLIENT_URL),
-  'https://teampadwebapp.vercel.app',
-  'http://localhost:8080',
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:5175',
-])
 
 const corsBaseOptions = {
   credentials: true,
@@ -37,24 +18,7 @@ const corsBaseOptions = {
   allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-CSRF-Token'],
 }
 
-const corsDelegate = (req, callback) => {
-  const origin = req.header('Origin')
-  if (!origin) {
-    return callback(null, { ...corsBaseOptions, origin: true })
-  }
-
-  const isAllowed =
-    frontendOrigins.includes(origin) || process.env.NODE_ENV === 'development'
-
-  if (!isAllowed) {
-    return callback(new Error('Not allowed by CORS'))
-  }
-
-  return callback(null, { ...corsBaseOptions, origin: true })
-}
-
-app.use(cors(corsDelegate))
-app.options('*', cors(corsDelegate))
+app.use(cors({ ...corsBaseOptions, origin: true }))
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
