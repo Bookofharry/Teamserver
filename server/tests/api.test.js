@@ -1,8 +1,8 @@
 import request from 'supertest'
-import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 let mockSupabase
-let server
+let app
 
 const seedStore = () => {
   const now = new Date().toISOString()
@@ -300,23 +300,12 @@ vi.mock('express-rate-limit', () => ({
   default: () => (_req, _res, next) => next(),
 }))
 
-const { app } = await import('../src/app.js')
+const appModule = await import('../src/app.js')
+app = appModule.app
 
-const api = () => request(server)
+const api = () => request(app)
 
 describe('API smoke tests', () => {
-  beforeAll(() => {
-    return new Promise((resolve, reject) => {
-      server = app.listen(0, '127.0.0.1')
-      server.once('listening', resolve)
-      server.once('error', reject)
-    })
-  })
-
-  afterAll(() => {
-    server?.close()
-  })
-
   beforeEach(() => {
     mockSupabase = createMockSupabase()
   })

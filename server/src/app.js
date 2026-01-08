@@ -39,6 +39,7 @@ app.get('/', (req, res) => {
   })
 })
 app.use('/api', apiRouter)
+app.use('/v1', apiRouter)
 
 app.use((err, req, res, next) => {
   const log = (req && req.log) || logger

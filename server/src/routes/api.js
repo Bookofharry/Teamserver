@@ -5,6 +5,7 @@ import { checkEmail, clearSession, createSession, getMe, updateMe } from '../con
 import { createUpgradeIntent } from '../controllers/billingController.js'
 import { createIdempotencyMiddleware } from '../middleware/idempotency.js'
 import { requireAdmin } from '../middleware/admin.js'
+import { ensureCsrfCookie } from '../middleware/csrf.js'
 import { listAdminUsers, updateAdminUserPlan } from '../controllers/adminController.js'
 import {
   acceptInvite,
@@ -66,6 +67,10 @@ const idempotencyInvite = createIdempotencyMiddleware('create_invite')
 router.post('/auth/check-email', publicLimiter, checkEmail)
 router.post('/auth/session', publicLimiter, createSession)
 router.post('/auth/logout', publicLimiter, clearSession)
+router.get('/csrf', publicLimiter, (req, res) => {
+  const token = ensureCsrfCookie(req, res)
+  res.json({ data: { token } })
+})
 router.get('/invites/:token', publicLimiter, getInviteInfo)
 router.get('/public/notes/:slug', publicLimiter, getPublicNote)
 

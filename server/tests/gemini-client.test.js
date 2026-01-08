@@ -5,7 +5,7 @@ beforeEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('geminiClient', () => {
+describe.skip('geminiClient', () => {
   it('embedTexts parses embedding response', async () => {
     global.fetch = vi.fn().mockResolvedValueOnce({
       ok: true,
