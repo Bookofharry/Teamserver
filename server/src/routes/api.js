@@ -69,6 +69,7 @@ router.post('/auth/session', publicLimiter, createSession)
 router.post('/auth/logout', publicLimiter, clearSession)
 router.get('/csrf', publicLimiter, (req, res) => {
   const token = ensureCsrfCookie(req, res)
+  res.setHeader('Cache-Control', 'no-store')
   res.json({ data: { token } })
 })
 router.get('/invites/:token', publicLimiter, getInviteInfo)
