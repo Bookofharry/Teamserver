@@ -18,8 +18,6 @@ const corsOptions = {
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-CSRF-Token'],
 }
-console.log('CORS options:', corsOptions)
-console.log('CORS allowed origins:', allowedOrigins)
 
 app.use(cors(corsOptions))
 app.use(express.json())
@@ -30,6 +28,9 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' })
 })
 app.get('/', (req, res) => {
+  console.log('CORS options:', corsOptions)
+  console.log('CORS allowed origins:', allowedOrigins)
+
   res.json({ status: 'ok', message: 'TeamPad API is live' })
 })
 app.use('/v1', apiRouter)
