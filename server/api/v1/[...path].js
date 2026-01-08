@@ -24,5 +24,9 @@ export default function handler(req, res) {
       .json({ error: { code: 'server_error', message: 'Server misconfigured' } })
   }
 
+  if (req.url && req.url.startsWith('/api')) {
+    req.url = req.url.replace(/^\/api/, '')
+  }
+
   return app(req, res)
 }
