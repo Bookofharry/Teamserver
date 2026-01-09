@@ -34,6 +34,7 @@ export const getMe = async (req, res) => {
     return handleSupabaseError(res, error, 'Failed to load profile')
   }
 
+  res.setHeader('Cache-Control', 'no-store')
   res.json({ data: toUserResponse(mapProfileRow(data)) })
 }
 
