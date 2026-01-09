@@ -2,7 +2,8 @@ import crypto from 'crypto'
 import { getAuthCookieName } from '../auth/supabaseAuth.js'
 
 const resolveCsrfCookieName = () => (process.env.CSRF_COOKIE_NAME || 'teampad_csrf').trim()
-const getCsrfSecret = () => (process.env.CSRF_SECRET || process.env.SUPABASE_JWT_SECRET || '').trim()
+const getCsrfSecret = () =>
+  (process.env.CSRF_SECRET || process.env.AUTH_JWT_SECRET || process.env.SUPABASE_JWT_SECRET || '').trim()
 const getCsrfTtlSeconds = () => {
   const raw = process.env.CSRF_TOKEN_TTL_SECONDS
   const parsed = Number(raw)
@@ -98,7 +99,7 @@ const issueCsrfToken = (authToken) => {
     nonce: createCsrfToken(),
   })
   if (!token) {
-    throw new Error('CSRF_SECRET or SUPABASE_JWT_SECRET must be set')
+    throw new Error('CSRF_SECRET or AUTH_JWT_SECRET must be set')
   }
   return token
 }

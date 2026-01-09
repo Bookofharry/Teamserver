@@ -8,6 +8,15 @@ let app
 const seedStore = () => {
   const now = new Date().toISOString()
   return {
+    users: [
+      {
+        id: 'user_1',
+        email: 'alex@teampad.io',
+        password_hash: 'hash',
+        created_at: now,
+        last_login_at: null,
+      },
+    ],
     profiles: [
       {
         id: 'user_1',
@@ -287,12 +296,14 @@ vi.mock('../src/auth/supabaseAuth.js', () => ({
     user_metadata: { full_name: 'Alex Johnson' },
     app_metadata: {},
   }),
+  createAuthToken: async () => 'test-token',
   buildAuthCookieOptions: () => ({ httpOnly: true, path: '/' }),
   getAuthCookieName: () => 'teampad_session',
 }))
 
 vi.mock('../src/utils/email.js', () => ({
   sendWorkspaceInviteEmail: async () => ({ sent: false, reason: 'test' }),
+  sendPasswordResetEmail: async () => ({ sent: false, reason: 'test' }),
 }))
 
 vi.mock('express-rate-limit', () => ({

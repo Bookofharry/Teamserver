@@ -1,8 +1,16 @@
 create extension if not exists "pgcrypto";
 create extension if not exists "pg_trgm";
 
+create table if not exists users (
+  id uuid primary key default gen_random_uuid(),
+  email text not null unique,
+  password_hash text,
+  created_at timestamptz default now(),
+  last_login_at timestamptz
+);
+
 create table if not exists profiles (
-  id uuid primary key references auth.users on delete cascade,
+  id uuid primary key references users(id) on delete cascade,
   email text not null,
   full_name text,
   avatar_url text,
@@ -99,6 +107,14 @@ create table if not exists workspace_invites (
   created_at timestamptz default now()
 );
 
+create table if not exists password_reset_tokens (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  token text not null unique,
+  expires_at timestamptz not null,
+  created_at timestamptz default now()
+);
+
 create table if not exists event_logs (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references profiles(id) on delete set null,
@@ -159,9 +175,12 @@ create unique index if not exists idx_upgrade_intents_unique on upgrade_intents(
 create index if not exists idx_idempotency_user_scope on idempotency_keys(user_id, scope);
 create index if not exists idx_idempotency_expires_at on idempotency_keys(expires_at);
 create index if not exists idx_idempotency_created_at on idempotency_keys(created_at);
+create index if not exists idx_users_email on users(email);
+create index if not exists idx_password_reset_tokens_user_id on password_reset_tokens(user_id);
 
 -- Enable RLS to prevent direct client access; server uses service_role.
 alter table profiles enable row level security;
+alter table users enable row level security;
 alter table workspaces enable row level security;
 alter table workspace_members enable row level security;
 alter table groups enable row level security;
@@ -172,6 +191,7 @@ alter table workspace_invites enable row level security;
 alter table event_logs enable row level security;
 alter table upgrade_intents enable row level security;
 alter table idempotency_keys enable row level security;
+alter table password_reset_tokens enable row level security;
 
 create or replace function public.create_workspace_with_defaults(p_name text, p_owner_id uuid)
 returns table (id uuid, name text, owner_id uuid, created_at timestamptz)

@@ -1,12 +1,23 @@
 import request from 'supertest'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import bcrypt from 'bcrypt'
 
 let mockSupabase
 let app
 
 const seedStore = () => {
   const now = new Date().toISOString()
+  const passwordHash = bcrypt.hashSync('password123', 8)
   return {
+    users: [
+      {
+        id: 'user_1',
+        email: 'alex@teampad.io',
+        password_hash: passwordHash,
+        created_at: now,
+        last_login_at: null,
+      },
+    ],
     profiles: [
       {
         id: 'user_1',
@@ -288,12 +299,14 @@ vi.mock('../src/auth/supabaseAuth.js', () => ({
     user_metadata: { full_name: 'Alex Johnson' },
     app_metadata: {},
   }),
+  createAuthToken: async () => 'test-token',
   buildAuthCookieOptions: () => ({ httpOnly: true, path: '/' }),
   getAuthCookieName: () => 'teampad_session',
 }))
 
 vi.mock('../src/utils/email.js', () => ({
   sendWorkspaceInviteEmail: async () => ({ sent: false, reason: 'test' }),
+  sendPasswordResetEmail: async () => ({ sent: false, reason: 'test' }),
 }))
 
 vi.mock('express-rate-limit', () => ({
@@ -312,8 +325,8 @@ describe('API smoke tests', () => {
 
   it('creates a session and sets an auth cookie', async () => {
     const res = await api()
-      .post('/v1/auth/session')
-      .send({ accessToken: 'fake_token' })
+      .post('/v1/auth/login')
+      .send({ email: 'alex@teampad.io', password: 'password123' })
       .expect(200)
 
     expect(res.body.data?.userId).toBe('user_1')

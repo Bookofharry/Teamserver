@@ -1,7 +1,16 @@
 import express from 'express'
 import rateLimit from 'express-rate-limit'
 import { requireSupabaseAuth } from '../auth/supabaseAuth.js'
-import { checkEmail, clearSession, createSession, getMe, updateMe } from '../controllers/authController.js'
+import {
+  checkEmail,
+  clearSession,
+  forgotPassword,
+  getMe,
+  login,
+  resetPassword,
+  signup,
+  updateMe,
+} from '../controllers/authController.js'
 import { createUpgradeIntent } from '../controllers/billingController.js'
 import { createIdempotencyMiddleware } from '../middleware/idempotency.js'
 import { requireAdmin } from '../middleware/admin.js'
@@ -65,8 +74,11 @@ const idempotencyNote = createIdempotencyMiddleware('create_note')
 const idempotencyInvite = createIdempotencyMiddleware('create_invite')
 
 router.post('/auth/check-email', publicLimiter, checkEmail)
-router.post('/auth/session', publicLimiter, createSession)
+router.post('/auth/signup', publicLimiter, signup)
+router.post('/auth/login', publicLimiter, login)
 router.post('/auth/logout', publicLimiter, clearSession)
+router.post('/auth/forgot-password', publicLimiter, forgotPassword)
+router.post('/auth/reset-password', publicLimiter, resetPassword)
 router.get('/csrf', publicLimiter, (req, res) => {
   const token = ensureCsrfCookie(req, res)
   res.setHeader('Cache-Control', 'no-store')

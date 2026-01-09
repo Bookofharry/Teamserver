@@ -81,6 +81,33 @@ const buildInviteEmail = ({ workspaceName, inviterName, role, inviteUrl }) => {
   return { subject, html, text }
 }
 
+const buildPasswordResetEmail = ({ resetUrl }) => {
+  const safeResetUrl = escapeHtml(resetUrl)
+  const subject = 'Reset your TeamPad password'
+  const html = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111;">
+      <h2 style="margin: 0 0 12px;">Reset your TeamPad password</h2>
+      <p style="margin: 0 0 12px;">
+        We received a request to reset your password. If this was you, use the link below.
+      </p>
+      <p style="margin: 0 0 16px;">
+        <a href="${safeResetUrl}" style="color: #0f172a; font-weight: 600; text-decoration: none;">
+          Reset password
+        </a>
+      </p>
+      <p style="margin: 0; font-size: 12px; color: #555;">
+        If you didn't request this, you can safely ignore this email.
+      </p>
+    </div>
+  `
+  const text = [
+    'We received a request to reset your password.',
+    `Reset password: ${resetUrl}`,
+    "If you didn't request this, you can safely ignore this email.",
+  ].join('\n')
+  return { subject, html, text }
+}
+
 export const sendWorkspaceInviteEmail = async ({ to, workspaceName, inviterName, role, token }) => {
   const host = (process.env.SMTP_HOST || '').trim()
   const from = (process.env.SMTP_FROM || '').trim()
@@ -91,6 +118,28 @@ export const sendWorkspaceInviteEmail = async ({ to, workspaceName, inviterName,
 
   const inviteUrl = `${appUrl}/invite/${token}`
   const { subject, html, text } = buildInviteEmail({ workspaceName, inviterName, role, inviteUrl })
+  const transporter = getTransporter()
+  const info = await transporter.sendMail({
+    from,
+    to,
+    subject,
+    html,
+    text,
+  })
+
+  return { sent: true, messageId: info?.messageId }
+}
+
+export const sendPasswordResetEmail = async ({ to, token }) => {
+  const host = (process.env.SMTP_HOST || '').trim()
+  const from = (process.env.SMTP_FROM || '').trim()
+  const appUrl = getAppUrl()
+  if (!host || !from || !appUrl) {
+    return { sent: false, skipped: true, reason: 'missing_config' }
+  }
+
+  const resetUrl = `${appUrl}/auth?view=reset-password&token=${encodeURIComponent(token)}`
+  const { subject, html, text } = buildPasswordResetEmail({ resetUrl })
   const transporter = getTransporter()
   const info = await transporter.sendMail({
     from,

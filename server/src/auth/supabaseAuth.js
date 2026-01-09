@@ -1,20 +1,11 @@
-import { createRemoteJWKSet, decodeProtectedHeader, jwtVerify } from 'jose'
+import { SignJWT, jwtVerify } from 'jose'
 import logger from '../utils/logger.js'
 
-const getJwtSecret = () => (process.env.SUPABASE_JWT_SECRET || '').trim()
-const getSupabaseUrl = () => (process.env.SUPABASE_URL || '').trim().replace(/\/$/, '')
-const getJwtIssuer = () =>
-  (process.env.SUPABASE_JWT_ISSUER || '').trim() || (getSupabaseUrl() ? `${getSupabaseUrl()}/auth/v1` : '')
-const getJwtAudience = () => (process.env.SUPABASE_JWT_AUDIENCE || 'authenticated').trim()
-const getJwksUrl = () => (process.env.SUPABASE_JWKS_URL || '').trim()
-const getJwksApiKey = () =>
-  (
-    process.env.SUPABASE_JWKS_API_KEY ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_PUBLISHABLE_DEFAULT_KEY ||
-    ''
-  ).trim()
-let remoteJwks
+const getJwtSecret = () => (process.env.AUTH_JWT_SECRET || '').trim()
+const getJwtIssuer = () => (process.env.AUTH_JWT_ISSUER || 'teampad').trim()
+const getJwtAudience = () => (process.env.AUTH_JWT_AUDIENCE || 'teampad').trim()
+export const getAuthTokenTtlSeconds = () =>
+  Number.parseInt(process.env.AUTH_JWT_TTL_SECONDS || String(60 * 60 * 24 * 7), 10)
 const resolveAuthCookieName = () => (process.env.AUTH_COOKIE_NAME || 'teampad_session').trim()
 const parseCookies = (cookieHeader = '') =>
   cookieHeader.split(';').reduce((acc, part) => {
@@ -39,46 +30,36 @@ const getAuthToken = (req) => {
   return token
 }
 
-export const verifySupabaseToken = async (token) => {
-  const header = decodeProtectedHeader(token)
-  const algorithm = header?.alg
-  const issuer = getJwtIssuer()
-  const audience = getJwtAudience()
-  const verifyOptions = {
-    issuer: issuer || undefined,
-    audience: audience || undefined,
-  }
-
-  if (!algorithm) {
-    throw new Error('JWT algorithm is missing')
-  }
-
-  if (algorithm === 'RS256' || algorithm === 'ES256') {
-    const supabaseUrl = getSupabaseUrl()
-    const jwksUrl = getJwksUrl() || (supabaseUrl ? `${supabaseUrl}/auth/v1/keys` : '')
-    if (!jwksUrl) {
-      throw new Error('SUPABASE_URL or SUPABASE_JWKS_URL must be set for asymmetric tokens')
-    }
-    if (!remoteJwks) {
-      const apiKey = getJwksApiKey()
-      const options = apiKey
-        ? { headers: { apikey: apiKey, Authorization: `Bearer ${apiKey}` } }
-        : undefined
-      remoteJwks = createRemoteJWKSet(new URL(jwksUrl), options)
-    }
-    const { payload } = await jwtVerify(token, remoteJwks, {
-      algorithms: ['RS256', 'ES256'],
-      ...verifyOptions,
-    })
-    return payload
-  }
-
+export const createAuthToken = async ({ userId, email, role = 'authenticated', name }) => {
   const secretValue = getJwtSecret()
   if (!secretValue) {
-    throw new Error('SUPABASE_JWT_SECRET is not set')
+    throw new Error('AUTH_JWT_SECRET is not set')
   }
   const secret = new TextEncoder().encode(secretValue)
-  const { payload } = await jwtVerify(token, secret, { algorithms: ['HS256'], ...verifyOptions })
+  const ttlSeconds = getAuthTokenTtlSeconds()
+  const now = Math.floor(Date.now() / 1000)
+
+  return new SignJWT({ email, role, name })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt(now)
+    .setIssuer(getJwtIssuer())
+    .setAudience(getJwtAudience())
+    .setSubject(userId)
+    .setExpirationTime(now + ttlSeconds)
+    .sign(secret)
+}
+
+export const verifySupabaseToken = async (token) => {
+  const secretValue = getJwtSecret()
+  if (!secretValue) {
+    throw new Error('AUTH_JWT_SECRET is not set')
+  }
+  const secret = new TextEncoder().encode(secretValue)
+  const { payload } = await jwtVerify(token, secret, {
+    algorithms: ['HS256'],
+    issuer: getJwtIssuer(),
+    audience: getJwtAudience(),
+  })
   return payload
 }
 
@@ -119,10 +100,10 @@ export const requireSupabaseAuth = async (req, res, next) => {
     const payload = await verifySupabaseToken(token)
     req.auth = {
       userId: payload.sub,
-      email: payload.email,
-      role: payload.role,
-      userMetadata: payload.user_metadata || {},
-      appMetadata: payload.app_metadata || {},
+      email: payload.email || '',
+      role: payload.role || 'authenticated',
+      userMetadata: payload.name ? { full_name: payload.name } : {},
+      appMetadata: {},
     }
     return next()
   } catch (error) {

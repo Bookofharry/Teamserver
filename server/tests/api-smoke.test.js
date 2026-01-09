@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import request from 'supertest'
+import bcrypt from 'bcrypt'
 
 const nowIso = new Date('2025-01-01T00:00:00.000Z').toISOString()
 const userId = 'user-1'
@@ -9,6 +10,7 @@ let supabaseMock
 let app
 
 const createSupabaseMock = () => {
+  const passwordHash = bcrypt.hashSync('password123', 8)
   const resolveResult = (state) => {
     const selectFields = String(state.selectFields || '')
     const isCount =
@@ -61,6 +63,17 @@ const createSupabaseMock = () => {
           full_name: 'Test User',
           email: 'test@example.com',
           avatar_url: null,
+        },
+        error: null,
+      }
+    }
+
+    if (state.table === 'users') {
+      return {
+        data: {
+          id: userId,
+          email: 'test@example.com',
+          password_hash: passwordHash,
         },
         error: null,
       }
@@ -217,6 +230,7 @@ vi.mock('../src/auth/supabaseAuth.js', () => ({
     role: 'authenticated',
     exp: Math.floor(Date.now() / 1000) + 3600,
   }),
+  createAuthToken: async () => 'test-token',
   buildAuthCookieOptions: () => ({
     httpOnly: true,
     sameSite: 'lax',
@@ -229,6 +243,7 @@ vi.mock('../src/auth/supabaseAuth.js', () => ({
 vi.mock('../src/utils/events.js', () => ({ logEvent: async () => {} }))
 vi.mock('../src/utils/email.js', () => ({
   sendWorkspaceInviteEmail: async () => ({ sent: true, messageId: 'test' }),
+  sendPasswordResetEmail: async () => ({ sent: false, reason: 'test' }),
 }))
 
 const getApp = async () => {
@@ -247,8 +262,8 @@ describe('API smoke', () => {
   it('creates a session and sets a cookie', async () => {
     const target = await getApp()
     const res = await request(target)
-      .post('/v1/auth/session')
-      .send({ accessToken: 'test-token' })
+      .post('/v1/auth/login')
+      .send({ email: 'test@example.com', password: 'password123' })
     expect(res.status).toBe(200)
     expect(res.headers['set-cookie']?.join('')).toContain('teampad_session')
   })

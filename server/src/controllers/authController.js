@@ -1,16 +1,32 @@
+import bcrypt from 'bcrypt'
+import crypto from 'crypto'
 import { getSupabaseAdmin, handleSupabaseError } from '../db/supabase.js'
 import { ensureProfile, mapProfileRow } from './helpers.js'
 import {
   buildAuthCookieOptions,
+  createAuthToken,
+  getAuthTokenTtlSeconds,
   getAuthCookieName,
-  verifySupabaseToken,
 } from '../auth/supabaseAuth.js'
 import { clearCsrfCookie } from '../middleware/csrf.js'
 import { isValidEmail, sanitizeEmail, sanitizeName, sanitizeText } from '../utils/sanitize.js'
 import { isHigherPlan, resolvePlanForUser } from '../utils/plan.js'
 import { parseBody } from '../utils/validation.js'
-import { checkEmailSchema, createSessionSchema, updateMeSchema } from '../dto/auth.js'
-import { toCheckEmailResponse, toClearSessionResponse, toSessionResponse, toUserResponse } from '../dto/responses/auth.js'
+import {
+  checkEmailSchema,
+  loginSchema,
+  resetPasswordSchema,
+  signupSchema,
+  updateMeSchema,
+  forgotPasswordSchema,
+} from '../dto/auth.js'
+import {
+  toCheckEmailResponse,
+  toClearSessionResponse,
+  toSessionResponse,
+  toUserResponse,
+} from '../dto/responses/auth.js'
+import { sendPasswordResetEmail } from '../utils/email.js'
 
 const sendInvalid = (res, message) =>
   res.status(400).json({ error: { code: 'invalid_request', message } })
@@ -79,73 +95,151 @@ export const updateMe = async (req, res) => {
   res.json({ data: toUserResponse(mapProfileRow(data)) })
 }
 
-export const createSession = async (req, res) => {
-  const input = parseBody(createSessionSchema, req, res)
+export const signup = async (req, res) => {
+  const input = parseBody(signupSchema, req, res)
   if (!input) return
-  const accessToken = (input.accessToken || input.token || '').trim()
-  if (!accessToken) {
-    return sendInvalid(res, 'accessToken is required')
+  const email = sanitizeEmail(input.email || '')
+  const name = sanitizeName(input.name || '')
+  if (!email || !isValidEmail(email)) {
+    return sendInvalid(res, 'Valid email is required')
+  }
+  if (!input.password || input.password.length < 8) {
+    return sendInvalid(res, 'Password must be at least 8 characters')
   }
 
-  let payload
-  try {
-    payload = await verifySupabaseToken(accessToken)
-  } catch (error) {
-    return res
-      .status(401)
-      .json({ error: { code: 'unauthorized', message: 'Invalid or expired token' } })
+  const supabase = getSupabaseAdmin()
+  const { data: existingUser, error: userError } = await supabase
+    .from('users')
+    .select('id, password_hash')
+    .eq('email', email)
+    .maybeSingle()
+  if (userError) {
+    return handleSupabaseError(res, userError, 'Failed to check existing users')
   }
 
-  const authPayload = {
-    userId: payload.sub,
-    email: payload.email,
-    role: payload.role,
-    userMetadata: payload.user_metadata || {},
-    appMetadata: payload.app_metadata || {},
+  let userId = existingUser?.id || null
+  if (!userId) {
+    const { data: profileRow, error: profileError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle()
+    if (profileError) {
+      return handleSupabaseError(res, profileError, 'Failed to check existing profiles')
+    }
+    userId = profileRow?.id || crypto.randomUUID()
   }
+
+  if (existingUser?.password_hash) {
+    return res.status(409).json({ error: { code: 'account_exists', message: 'Account already exists' } })
+  }
+
+  const passwordHash = await bcrypt.hash(input.password, 12)
+  if (existingUser) {
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ password_hash: passwordHash })
+      .eq('id', userId)
+    if (updateError) {
+      return handleSupabaseError(res, updateError, 'Failed to set password')
+    }
+  } else {
+    const { error: insertError } = await supabase
+      .from('users')
+      .insert({ id: userId, email, password_hash: passwordHash })
+    if (insertError) {
+      return handleSupabaseError(res, insertError, 'Failed to create user')
+    }
+  }
+
   try {
-    await ensureProfile(authPayload)
+    await ensureProfile({ userId, email, userMetadata: { full_name: name } })
   } catch (error) {
     return handleSupabaseError(res, error, 'Failed to sync profile')
   }
 
+  const token = await createAuthToken({ userId, email, name })
+  const cookieOptions = buildAuthCookieOptions({
+    exp: Math.floor(Date.now() / 1000) + getAuthTokenTtlSeconds(),
+  })
+  res.cookie(getAuthCookieName(), token, cookieOptions)
+  return res.json({ data: toSessionResponse({ userId, email }) })
+}
+
+export const login = async (req, res) => {
+  const input = parseBody(loginSchema, req, res)
+  if (!input) return
+  const email = sanitizeEmail(input.email || '')
+  if (!email || !isValidEmail(email)) {
+    return sendInvalid(res, 'Valid email is required')
+  }
+
   const supabase = getSupabaseAdmin()
+  const { data: userRow, error: userError } = await supabase
+    .from('users')
+    .select('id, email, password_hash')
+    .eq('email', email)
+    .maybeSingle()
+  if (userError) {
+    return handleSupabaseError(res, userError, 'Failed to load user')
+  }
+  if (!userRow) {
+    return res.status(401).json({ error: { code: 'unauthorized', message: 'Invalid email or password' } })
+  }
+  if (!userRow.password_hash) {
+    return res.status(403).json({ error: { code: 'password_not_set', message: 'Password not set' } })
+  }
+
+  const isValid = await bcrypt.compare(input.password, userRow.password_hash)
+  if (!isValid) {
+    return res.status(401).json({ error: { code: 'unauthorized', message: 'Invalid email or password' } })
+  }
+
   const { data: profileRow, error: profileError } = await supabase
     .from('profiles')
-    .select('plan, is_subscribed')
-    .eq('id', payload.sub)
+    .select('plan, is_subscribed, full_name')
+    .eq('id', userRow.id)
     .maybeSingle()
-
   if (profileError) {
     return handleSupabaseError(res, profileError, 'Failed to load profile')
   }
+  if (!profileRow) {
+    try {
+      await ensureProfile({ userId: userRow.id, email: userRow.email, userMetadata: {} })
+    } catch (error) {
+      return handleSupabaseError(res, error, 'Failed to sync profile')
+    }
+  }
 
-  const authPlan = payload.app_metadata?.plan || payload.user_metadata?.plan
   const resolvedPlan = resolvePlanForUser({
     profilePlan: profileRow?.plan,
-    authPlan,
+    authPlan: null,
     isSubscribed: profileRow?.is_subscribed,
-    email: payload.email,
-    userId: payload.sub,
+    email: userRow.email,
+    userId: userRow.id,
   })
   if (isHigherPlan(resolvedPlan, profileRow?.plan)) {
     const { error: updateError } = await supabase
       .from('profiles')
       .update({ plan: resolvedPlan })
-      .eq('id', payload.sub)
+      .eq('id', userRow.id)
     if (updateError) {
       return handleSupabaseError(res, updateError, 'Failed to update profile plan')
     }
   }
 
-  const cookieOptions = buildAuthCookieOptions(payload)
-  res.cookie(getAuthCookieName(), accessToken, cookieOptions)
-  return res.json({
-    data: toSessionResponse({
-      userId: payload.sub,
-      email: payload.email,
-    }),
+  const token = await createAuthToken({
+    userId: userRow.id,
+    email: userRow.email,
+    name: profileRow?.full_name || '',
   })
+  const cookieOptions = buildAuthCookieOptions({
+    exp: Math.floor(Date.now() / 1000) + getAuthTokenTtlSeconds(),
+  })
+  res.cookie(getAuthCookieName(), token, cookieOptions)
+  await supabase.from('users').update({ last_login_at: new Date().toISOString() }).eq('id', userRow.id)
+
+  return res.json({ data: toSessionResponse({ userId: userRow.id, email: userRow.email }) })
 }
 
 export const clearSession = async (_req, res) => {
@@ -168,20 +262,8 @@ export const checkEmail = async (req, res) => {
     await new Promise((resolve) => setTimeout(resolve, delayMs))
   }
   const supabase = getSupabaseAdmin()
-  let authUserExists = false
-  const admin = supabase.auth?.admin
-  if (admin && typeof admin.getUserByEmail === 'function') {
-    const { data: authData, error: authError } = await admin.getUserByEmail(email)
-    if (authError) {
-      if (!/not found/i.test(authError.message || '')) {
-        return handleSupabaseError(res, authError, 'Failed to check email')
-      }
-    } else if (authData?.user?.id) {
-      authUserExists = true
-    }
-  }
   const { data, error } = await supabase
-    .from('profiles')
+    .from('users')
     .select('id')
     .eq('email', email)
     .limit(1)
@@ -189,5 +271,76 @@ export const checkEmail = async (req, res) => {
   if (error) {
     return handleSupabaseError(res, error, 'Failed to check email')
   }
-  return res.json({ data: toCheckEmailResponse({ exists: authUserExists || Boolean(data?.id) }) })
+  return res.json({ data: toCheckEmailResponse({ exists: Boolean(data?.id) }) })
+}
+
+export const forgotPassword = async (req, res) => {
+  const input = parseBody(forgotPasswordSchema, req, res)
+  if (!input) return
+  const email = sanitizeEmail(input.email || '')
+  if (!email || !isValidEmail(email)) {
+    return sendInvalid(res, 'Valid email is required')
+  }
+
+  const supabase = getSupabaseAdmin()
+  const { data: userRow, error: userError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('email', email)
+    .maybeSingle()
+  if (userError) {
+    return handleSupabaseError(res, userError, 'Failed to load user')
+  }
+
+  if (!userRow) {
+    return res.json({ data: { sent: true } })
+  }
+
+  const token = `reset_${crypto.randomUUID()}`
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 30).toISOString()
+  const { error: insertError } = await supabase
+    .from('password_reset_tokens')
+    .insert({ user_id: userRow.id, token, expires_at: expiresAt })
+  if (insertError) {
+    return handleSupabaseError(res, insertError, 'Failed to create reset token')
+  }
+
+  await sendPasswordResetEmail({ to: email, token })
+  return res.json({ data: { sent: true } })
+}
+
+export const resetPassword = async (req, res) => {
+  const input = parseBody(resetPasswordSchema, req, res)
+  if (!input) return
+  if (!input.password || input.password.length < 8) {
+    return sendInvalid(res, 'Password must be at least 8 characters')
+  }
+
+  const supabase = getSupabaseAdmin()
+  const { data: tokenRow, error: tokenError } = await supabase
+    .from('password_reset_tokens')
+    .select('id, user_id, expires_at')
+    .eq('token', input.token)
+    .maybeSingle()
+  if (tokenError) {
+    return handleSupabaseError(res, tokenError, 'Failed to load reset token')
+  }
+  if (!tokenRow) {
+    return res.status(400).json({ error: { code: 'invalid_token', message: 'Invalid or expired token' } })
+  }
+  if (new Date(tokenRow.expires_at).getTime() <= Date.now()) {
+    return res.status(400).json({ error: { code: 'invalid_token', message: 'Invalid or expired token' } })
+  }
+
+  const passwordHash = await bcrypt.hash(input.password, 12)
+  const { error: updateError } = await supabase
+    .from('users')
+    .update({ password_hash: passwordHash })
+    .eq('id', tokenRow.user_id)
+  if (updateError) {
+    return handleSupabaseError(res, updateError, 'Failed to update password')
+  }
+
+  await supabase.from('password_reset_tokens').delete().eq('id', tokenRow.id)
+  return res.json({ data: { updated: true } })
 }
