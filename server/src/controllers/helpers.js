@@ -17,6 +17,7 @@ export const mapProfileRow = (profile) => ({
   twoFactorEnabled: false,
   plan: normalizePlan(profile?.plan) || (profile?.is_subscribed ? 'premium' : 'free'),
   isSubscribed: normalizePlan(profile?.plan) ? normalizePlan(profile?.plan) !== 'free' : profile?.is_subscribed ?? false,
+  lastWorkspaceId: profile?.last_workspace_id ?? null,
 })
 
 export const mapNoteRow = (row, profile) => {
@@ -65,7 +66,8 @@ export const requireWorkspaceMember = async (req, res, workspaceId) => {
     .maybeSingle()
 
   if (error) {
-    return res.status(500).json({ error: { code: 'database_error', message: 'Failed to check access' } })
+    res.status(500).json({ error: { code: 'database_error', message: 'Failed to check access' } })
+    return null
   }
   if (!data) {
     res.status(403).json({ error: { code: 'forbidden', message: 'Access denied' } })

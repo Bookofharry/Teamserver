@@ -21,8 +21,10 @@ const corsBaseOptions = {
 
 app.use(cors({ ...corsBaseOptions, origin: true }))
 app.options(/.*/, cors({ ...corsBaseOptions, origin: true }))
-app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
+const bodyLimit = process.env.REQUEST_BODY_LIMIT || '2mb'
+
+app.use(express.json({ limit: bodyLimit }))
+app.use(express.urlencoded({ extended: true, limit: bodyLimit }))
 app.use(cookieParser())
 app.use(requestIdMiddleware)
 app.use(csrfMiddleware)
@@ -44,6 +46,12 @@ app.use('/v1', apiRouter)
 app.use((err, req, res, next) => {
   const log = (req && req.log) || logger
   log.error({ err, requestId: req?.requestId }, 'Unhandled error')
+  if (res.headersSent) return
+  if (err?.type === 'entity.too.large' || err?.status === 413) {
+    return res.status(413).json({
+      error: { code: 'payload_too_large', message: 'Payload too large. Please reduce the size and try again.' },
+    })
+  }
   res.status(500).json({ error: { code: 'server_error', message: 'Unexpected server error' } })
 })
 app.use((req, res) => {

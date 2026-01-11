@@ -104,13 +104,45 @@ const saveNoteVersion = async (supabase, noteRow, userId) => {
   if (error) throw error
 }
 
+export const getNote = async (req, res) => {
+  const { id } = req.params
+  const supabase = getSupabaseAdmin()
+
+  const { data: noteRow, error } = await supabase
+    .from('notes')
+    .select('id, title, body, workspace_id, group_id, tags, is_pinned, is_public, public_slug, public_published_at, public_expires_at, created_at, updated_at, updated_by_id')
+    .eq('id', id)
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  if (error) {
+    return handleSupabaseError(res, error, 'Failed to load note')
+  }
+
+  if (!noteRow) {
+    return res.status(404).json({ error: { code: 'not_found', message: 'Note not found' } })
+  }
+
+  if (!(await requireWorkspaceMember(req, res, noteRow.workspace_id))) return
+
+  let profilesMap = new Map()
+  try {
+    profilesMap = await getProfilesMap(supabase, noteRow.updated_by_id ? [noteRow.updated_by_id] : [])
+  } catch (profileError) {
+    return handleSupabaseError(res, profileError, 'Failed to load note author')
+  }
+
+  const mapped = mapNoteRow(noteRow, profilesMap.get(noteRow.updated_by_id))
+  res.json({ data: toNoteResponse(mapped) })
+}
+
 export const listNotes = async (req, res) => {
   const { id } = req.params
   const groupId = sanitizeText(req.query?.groupId || '')
   const rawQuery = sanitizeText(req.query?.query || '')
   const searchQuery = rawQuery.replace(/[,%]/g, ' ').trim()
   const supabase = getSupabaseAdmin()
-  const { from, to } = parsePagination(req, { defaultLimit: 50 })
+  const { from, to } = parsePagination(req, { defaultLimit: 50, maxLimit: 100 })
 
   if (!(await requireWorkspaceMember(req, res, id))) return
 
@@ -151,9 +183,21 @@ export const listNotes = async (req, res) => {
     return handleSupabaseError(res, profileError, 'Failed to load note authors')
   }
 
-  const data = noteRows.map((note) =>
-    toNoteResponse(mapNoteRow(note, profilesMap.get(note.updated_by_id))),
-  )
+  const buildPreview = (value) => {
+    if (!value) return ''
+    return value
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/[#*`\[\]]/g, '')
+      .trim()
+      .slice(0, 120)
+  }
+
+  const data = noteRows.map((note) => {
+    const mapped = mapNoteRow(note, profilesMap.get(note.updated_by_id))
+    const bodyPreview = buildPreview(mapped.body)
+    return toNoteResponse({ ...mapped, body: '', bodyPreview })
+  })
   res.json({ data })
 }
 
@@ -616,12 +660,41 @@ export const listNoteVersions = async (req, res) => {
 
   if (!(await requireWorkspaceMember(req, res, noteRow.workspace_id))) return
 
+  const { data: profileRow, error: profileError } = await supabase
+    .from('profiles')
+    .select('is_subscribed, plan')
+    .eq('id', req.auth.userId)
+    .maybeSingle()
+
+  if (profileError) {
+    return handleSupabaseError(res, profileError, 'Failed to load profile')
+  }
+
+  const authPlan = req.auth?.appMetadata?.plan || req.auth?.userMetadata?.plan
+  const plan = resolvePlanForUser({
+    profilePlan: profileRow?.plan,
+    authPlan,
+    isSubscribed: profileRow?.is_subscribed,
+    email: req.auth.email,
+    userId: req.auth.userId,
+  })
+  const versionLimit = plan === 'premium_plus' ? 20 : plan === 'premium' ? 10 : 3
+
+  const { count: totalCount, error: countError } = await supabase
+    .from('note_versions')
+    .select('id', { count: 'exact', head: true })
+    .eq('note_id', noteId)
+
+  if (countError) {
+    return handleSupabaseError(res, countError, 'Failed to load version count')
+  }
+
   const { data: versionRows, error: versionError } = await supabase
     .from('note_versions')
     .select('id, note_id, title, created_at, created_by_id')
     .eq('note_id', noteId)
     .order('created_at', { ascending: false })
-    .limit(50)
+    .limit(versionLimit)
 
   if (versionError) {
     return handleSupabaseError(res, versionError, 'Failed to load note versions')
@@ -642,7 +715,15 @@ export const listNoteVersions = async (req, res) => {
     toNoteVersionResponse(mapVersionRow(row, profilesMap.get(row.created_by_id))),
   )
 
-  res.json({ data })
+  res.json({
+    data: {
+      items: data,
+      meta: {
+        total: totalCount ?? data.length,
+        limit: versionLimit,
+      },
+    },
+  })
 }
 
 export const getNoteVersion = async (req, res) => {

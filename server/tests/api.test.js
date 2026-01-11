@@ -1,9 +1,11 @@
 import request from 'supertest'
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from 'vitest'
 import bcrypt from 'bcrypt'
 
 let mockSupabase
 let app
+let server
+let baseUrl
 
 const seedStore = () => {
   const now = new Date().toISOString()
@@ -51,6 +53,8 @@ const seedStore = () => {
     ],
     notes: [],
     workspace_invites: [],
+    signup_otps: [],
+    password_reset_tokens: [],
     upgrade_intents: [],
     idempotency_keys: [],
     event_logs: [],
@@ -166,6 +170,12 @@ class MockQuery {
 
   range(from, to) {
     this.rangeBounds = { from, to }
+    return this
+  }
+
+  limit(count) {
+    const upper = Math.max(0, count - 1)
+    this.rangeBounds = { from: 0, to: upper }
     return this
   }
 
@@ -301,22 +311,36 @@ vi.mock('../src/auth/supabaseAuth.js', () => ({
   }),
   createAuthToken: async () => 'test-token',
   buildAuthCookieOptions: () => ({ httpOnly: true, path: '/' }),
+  getAuthTokenTtlSeconds: () => 3600,
   getAuthCookieName: () => 'teampad_session',
 }))
 
 vi.mock('../src/utils/email.js', () => ({
   sendWorkspaceInviteEmail: async () => ({ sent: false, reason: 'test' }),
-  sendPasswordResetEmail: async () => ({ sent: false, reason: 'test' }),
+  sendPasswordResetEmail: async () => ({ sent: true, messageId: 'test' }),
+  sendSignupOtpEmail: async () => ({ sent: true, messageId: 'test' }),
 }))
 
 vi.mock('express-rate-limit', () => ({
   default: () => (_req, _res, next) => next(),
 }))
 
-const appModule = await import('../src/app.js')
-app = appModule.app
+beforeAll(async () => {
+  const appModule = await import('../src/app.js')
+  app = appModule.app
+  server = app.listen(0, '127.0.0.1')
+  await new Promise((resolve) => server.once('listening', resolve))
+  const address = server.address()
+  baseUrl = `http://127.0.0.1:${address.port}`
+})
 
-const api = () => request(app)
+afterAll(async () => {
+  if (server) {
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+const api = () => request(baseUrl)
 
 describe('API smoke tests', () => {
   beforeEach(() => {
@@ -331,6 +355,52 @@ describe('API smoke tests', () => {
 
     expect(res.body.data?.userId).toBe('user_1')
     expect(res.headers['set-cookie']).toBeDefined()
+  })
+
+  it('requests a signup OTP', async () => {
+    const res = await api()
+      .post('/v1/auth/signup/request')
+      .send({ email: 'new@teampad.io' })
+      .expect(200)
+
+    expect(res.body.data?.sent).toBe(true)
+    expect(mockSupabase._store.signup_otps.length).toBe(1)
+  })
+
+  it('rejects signup OTP requests within cooldown', async () => {
+    mockSupabase._store.signup_otps.push({
+      id: 'otp_1',
+      email: 'cooldown@teampad.io',
+      code: '123456',
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+    })
+
+    const res = await api()
+      .post('/v1/auth/signup/request')
+      .send({ email: 'cooldown@teampad.io' })
+
+    expect(res.status).toBe(429)
+  })
+
+  it('verifies a signup OTP and creates a user', async () => {
+    mockSupabase._store.signup_otps.push({
+      id: 'otp_2',
+      email: 'fresh@teampad.io',
+      code: '654321',
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+    })
+
+    const res = await api()
+      .post('/v1/auth/signup/verify')
+      .send({ name: 'Fresh User', email: 'fresh@teampad.io', password: 'password123', code: '654321' })
+      .expect(200)
+
+    expect(res.body.data?.email).toBe('fresh@teampad.io')
+    const createdUser = mockSupabase._store.users.find((row) => row.email === 'fresh@teampad.io')
+    expect(createdUser).toBeTruthy()
+    expect(mockSupabase._store.signup_otps.find((row) => row.email === 'fresh@teampad.io')).toBeUndefined()
   })
 
   it('creates a note in a workspace', async () => {

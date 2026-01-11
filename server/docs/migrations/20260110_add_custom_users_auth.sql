@@ -14,6 +14,14 @@ create table if not exists password_reset_tokens (
   created_at timestamptz default now()
 );
 
+create table if not exists signup_otps (
+  id uuid primary key default gen_random_uuid(),
+  email text not null,
+  code text not null,
+  expires_at timestamptz not null,
+  created_at timestamptz default now()
+);
+
 insert into users (id, email, created_at)
 select id, email, created_at
 from profiles
@@ -26,3 +34,4 @@ alter table profiles
 
 alter table users enable row level security;
 alter table password_reset_tokens enable row level security;
+alter table signup_otps enable row level security;

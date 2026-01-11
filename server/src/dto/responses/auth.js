@@ -11,6 +11,7 @@ export const userResponseSchema = z.object({
   twoFactorEnabled: z.boolean(),
   isSubscribed: z.boolean(),
   plan: planSchema,
+  lastWorkspaceId: z.string().nullable().optional(),
 })
 
 export const sessionResponseSchema = z.object({

@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer'
+import logger from './logger.js'
 
 const escapeHtml = (value) =>
   String(value || '')
@@ -18,6 +19,7 @@ const getSmtpPort = () => {
 const isSecure = () => String(process.env.SMTP_SECURE || '').trim().toLowerCase() === 'true'
 
 let cachedTransporter
+let didVerify = false
 
 const getTransporter = () => {
   if (cachedTransporter) return cachedTransporter
@@ -36,6 +38,26 @@ const getTransporter = () => {
   })
 
   return cachedTransporter
+}
+
+const verifyTransporter = async () => {
+  if (didVerify || process.env.NODE_ENV === 'production') return
+  didVerify = true
+  try {
+    const transporter = getTransporter()
+    await transporter.verify()
+    logger.info('SMTP connection verified')
+  } catch (error) {
+    logger.warn({ error: error?.message || error }, 'SMTP connection failed')
+  }
+}
+
+const logSkippedEmail = (reason, details = {}) => {
+  const payload = { reason, ...details }
+  logger.warn(payload, 'Email skipped')
+  if (process.env.NODE_ENV !== 'production') {
+    console.warn('[email] skipped', payload)
+  }
 }
 
 const buildInviteEmail = ({ workspaceName, inviterName, role, inviteUrl }) => {
@@ -108,14 +130,67 @@ const buildPasswordResetEmail = ({ resetUrl }) => {
   return { subject, html, text }
 }
 
+const buildSignupOtpEmail = ({ code }) => {
+  const safeCode = escapeHtml(code)
+  const subject = 'Your TeamPad verification code'
+  const html = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111;">
+      <h2 style="margin: 0 0 12px;">Verify your email</h2>
+      <p style="margin: 0 0 12px;">Use this code to finish creating your TeamPad account:</p>
+      <p style="margin: 0 0 16px; font-size: 22px; font-weight: 700; letter-spacing: 2px;">
+        ${safeCode}
+      </p>
+      <p style="margin: 0; font-size: 12px; color: #555;">
+        This code expires in 10 minutes.
+      </p>
+    </div>
+  `
+  const text = `Your TeamPad verification code: ${code}\nThis code expires in 10 minutes.`
+  return { subject, html, text }
+}
+
+const buildMentionEmail = ({ workspaceName, senderName, snippet, appUrl }) => {
+  const safeWorkspace = escapeHtml(workspaceName || 'TeamPad workspace')
+  const safeSender = escapeHtml(senderName || 'Someone')
+  const safeSnippet = escapeHtml(snippet || '')
+  const subject = `You were mentioned in ${safeWorkspace}`
+  const html = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111;">
+      <h2 style="margin: 0 0 12px;">You were mentioned on TeamPad</h2>
+      <p style="margin: 0 0 12px;">
+        ${safeSender} mentioned you in <strong>${safeWorkspace}</strong>.
+      </p>
+      ${safeSnippet ? `<p style="margin: 0 0 12px; color: #334155;">"${safeSnippet}"</p>` : ''}
+      <p style="margin: 0 0 16px;">
+        <a href="${escapeHtml(appUrl)}" style="color: #0f172a; font-weight: 600; text-decoration: none;">
+          Open TeamPad
+        </a>
+      </p>
+      <p style="margin: 0; font-size: 12px; color: #555;">
+        You can manage notifications in your workspace settings.
+      </p>
+    </div>
+  `
+  const text = [
+    `${senderName || 'Someone'} mentioned you in ${workspaceName || 'TeamPad workspace'}.`,
+    snippet ? `"${snippet}"` : '',
+    `Open TeamPad: ${appUrl}`,
+  ]
+    .filter(Boolean)
+    .join('\n')
+  return { subject, html, text }
+}
+
 export const sendWorkspaceInviteEmail = async ({ to, workspaceName, inviterName, role, token }) => {
   const host = (process.env.SMTP_HOST || '').trim()
   const from = (process.env.SMTP_FROM || '').trim()
   const appUrl = getAppUrl()
   if (!host || !from || !appUrl) {
+    logSkippedEmail('missing_config', { to, needsAppUrl: !appUrl })
     return { sent: false, skipped: true, reason: 'missing_config' }
   }
 
+  await verifyTransporter()
   const inviteUrl = `${appUrl}/invite/${token}`
   const { subject, html, text } = buildInviteEmail({ workspaceName, inviterName, role, inviteUrl })
   const transporter = getTransporter()
@@ -135,11 +210,58 @@ export const sendPasswordResetEmail = async ({ to, token }) => {
   const from = (process.env.SMTP_FROM || '').trim()
   const appUrl = getAppUrl()
   if (!host || !from || !appUrl) {
+    logSkippedEmail('missing_config', { to, needsAppUrl: !appUrl })
     return { sent: false, skipped: true, reason: 'missing_config' }
   }
 
+  await verifyTransporter()
   const resetUrl = `${appUrl}/auth?view=reset-password&token=${encodeURIComponent(token)}`
   const { subject, html, text } = buildPasswordResetEmail({ resetUrl })
+  const transporter = getTransporter()
+  const info = await transporter.sendMail({
+    from,
+    to,
+    subject,
+    html,
+    text,
+  })
+
+  return { sent: true, messageId: info?.messageId }
+}
+
+export const sendSignupOtpEmail = async ({ to, code }) => {
+  const host = (process.env.SMTP_HOST || '').trim()
+  const from = (process.env.SMTP_FROM || '').trim()
+  if (!host || !from) {
+    logSkippedEmail('missing_config', { to })
+    return { sent: false, skipped: true, reason: 'missing_config' }
+  }
+
+  await verifyTransporter()
+  const { subject, html, text } = buildSignupOtpEmail({ code })
+  const transporter = getTransporter()
+  const info = await transporter.sendMail({
+    from,
+    to,
+    subject,
+    html,
+    text,
+  })
+
+  return { sent: true, messageId: info?.messageId }
+}
+
+export const sendMentionEmail = async ({ to, workspaceName, senderName, snippet }) => {
+  const host = (process.env.SMTP_HOST || '').trim()
+  const from = (process.env.SMTP_FROM || '').trim()
+  const appUrl = getAppUrl()
+  if (!host || !from || !appUrl) {
+    logSkippedEmail('missing_config', { to, needsAppUrl: !appUrl })
+    return { sent: false, skipped: true, reason: 'missing_config' }
+  }
+
+  await verifyTransporter()
+  const { subject, html, text } = buildMentionEmail({ workspaceName, senderName, snippet, appUrl })
   const transporter = getTransporter()
   const info = await transporter.sendMail({
     from,

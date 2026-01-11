@@ -1,8 +1,10 @@
 import request from 'supertest'
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from 'vitest'
 
 let mockSupabase
 let app
+let server
+let baseUrl
 
 // reuse mock setup from api.test.js
 const seedStore = () => {
@@ -298,6 +300,7 @@ vi.mock('../src/auth/supabaseAuth.js', () => ({
   }),
   createAuthToken: async () => 'test-token',
   buildAuthCookieOptions: () => ({ httpOnly: true, path: '/' }),
+  getAuthTokenTtlSeconds: () => 3600,
   getAuthCookieName: () => 'teampad_session',
 }))
 
@@ -310,10 +313,22 @@ vi.mock('express-rate-limit', () => ({
   default: () => (_req, _res, next) => next(),
 }))
 
-const appModule = await import('../src/app.js')
-app = appModule.app
+beforeAll(async () => {
+  const appModule = await import('../src/app.js')
+  app = appModule.app
+  server = app.listen(0, '127.0.0.1')
+  await new Promise((resolve) => server.once('listening', resolve))
+  const address = server.address()
+  baseUrl = `http://127.0.0.1:${address.port}`
+})
 
-const api = () => request(app)
+afterAll(async () => {
+  if (server) {
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+const api = () => request(baseUrl)
 
 describe('Plan normalization and limits', () => {
   beforeEach(() => {

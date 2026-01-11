@@ -7,8 +7,10 @@ import {
   forgotPassword,
   getMe,
   login,
+  refreshSession,
   resetPassword,
-  signup,
+  requestSignupOtp,
+  verifySignupOtp,
   updateMe,
 } from '../controllers/authController.js'
 import { createUpgradeIntent } from '../controllers/billingController.js'
@@ -41,11 +43,27 @@ import {
   listNoteAttachments,
   listNoteVersions,
   listNotes,
+  getNote,
   restoreNoteVersion,
   togglePin,
   updateNote,
   updateNotePublicStatus,
 } from '../controllers/notesController.js'
+import {
+  createChatMessage,
+  createChatReaction,
+  createChatUpload,
+  deleteChatMessage,
+  deleteChatReaction,
+  getChatUnreadCounts,
+  listChatAudits,
+  listChatMentions,
+  listChatMessages,
+  markChatMentionsRead,
+  updateChatMessage,
+} from '../controllers/chatController.js'
+import { createAblyToken } from '../controllers/ablyController.js'
+import { publishChatEvent } from '../controllers/ablyChatController.js'
 
 const router = express.Router()
 
@@ -59,13 +77,15 @@ const makeLimiter = ({ windowMs = 60 * 1000, max = 60, keyGenerator, message } =
     message: message || { error: { code: 'rate_limited', message: 'Too many requests. Please slow down.' } },
   })
 
-const publicLimiter = makeLimiter({ windowMs: 60 * 1000, max: 30, keyGenerator: (req) => req.ip })
+const publicLimiter = makeLimiter({ windowMs: 60 * 1000, max: 120, keyGenerator: (req) => req.ip })
+const authLimiter = makeLimiter({ windowMs: 60 * 1000, max: 300, keyGenerator: (req) => req.ip })
 const writeLimiter = makeLimiter({ windowMs: 60 * 1000, max: 20 })
 
 // Read limiters with different caps for per-route tuning
 const readLimiterHigh = makeLimiter({ windowMs: 60 * 1000, max: 120 })
 const readLimiterDefault = makeLimiter({ windowMs: 60 * 1000, max: 60 })
 const readLimiterLow = makeLimiter({ windowMs: 60 * 1000, max: 30 })
+const readLimiterChatMarks = makeLimiter({ windowMs: 60 * 1000, max: 300 })
 
 
 const idempotencyWorkspace = createIdempotencyMiddleware('create_workspace')
@@ -73,12 +93,13 @@ const idempotencyGroup = createIdempotencyMiddleware('create_group')
 const idempotencyNote = createIdempotencyMiddleware('create_note')
 const idempotencyInvite = createIdempotencyMiddleware('create_invite')
 
-router.post('/auth/check-email', publicLimiter, checkEmail)
-router.post('/auth/signup', publicLimiter, signup)
-router.post('/auth/login', publicLimiter, login)
-router.post('/auth/logout', publicLimiter, clearSession)
-router.post('/auth/forgot-password', publicLimiter, forgotPassword)
-router.post('/auth/reset-password', publicLimiter, resetPassword)
+router.post('/auth/check-email', checkEmail)
+router.post('/auth/signup/request', requestSignupOtp)
+router.post('/auth/signup/verify', verifySignupOtp)
+router.post('/auth/login', authLimiter, login)
+router.post('/auth/logout', authLimiter, clearSession)
+router.post('/auth/forgot-password', forgotPassword)
+router.post('/auth/reset-password', resetPassword)
 router.get('/csrf', publicLimiter, (req, res) => {
   const token = ensureCsrfCookie(req, res)
   res.setHeader('Cache-Control', 'no-store')
@@ -89,46 +110,61 @@ router.get('/public/notes/:slug', publicLimiter, getPublicNote)
 
 router.use(requireSupabaseAuth)
 
-router.get('/me', readLimiterHigh, getMe)
-router.patch('/me', writeLimiter, updateMe)
-router.post('/upgrade-intents', writeLimiter, createUpgradeIntent)
-router.get('/invites', readLimiterDefault, listMyInvites)
+router.get('/me', getMe)
+router.patch('/me', updateMe)
+router.get('/auth/refresh', refreshSession)
+router.post('/upgrade-intents', createUpgradeIntent)
+router.get('/invites', listMyInvites)
 
-router.get('/admin/users', readLimiterDefault, requireAdmin, listAdminUsers)
-router.patch('/admin/users/:id/plan', writeLimiter, requireAdmin, updateAdminUserPlan)
+router.get('/admin/users', requireAdmin, listAdminUsers)
+router.patch('/admin/users/:id/plan', requireAdmin, updateAdminUserPlan)
 
-router.get('/workspaces', readLimiterLow, listWorkspaces)
-router.post('/workspaces', writeLimiter, idempotencyWorkspace, createWorkspace)
-router.patch('/workspaces/:id', writeLimiter, updateWorkspace)
-router.delete('/workspaces/:id', writeLimiter, deleteWorkspace)
-router.get('/workspaces/:id/members', readLimiterDefault, listWorkspaceMembers)
-router.get('/workspaces/:id/invites', readLimiterDefault, listWorkspaceInvites)
-router.delete('/workspaces/:id/members/:userId', writeLimiter, removeWorkspaceMember)
-router.post('/workspaces/:id/invites', writeLimiter, idempotencyInvite, createInvite)
-router.post('/invites/:token/accept', writeLimiter, acceptInvite)
-router.post('/invites/:token/decline', writeLimiter, declineInvite)
-router.get('/workspaces/:id/groups', readLimiterDefault, listGroups)
-router.post('/workspaces/:id/groups', writeLimiter, idempotencyGroup, createGroup)
-router.delete('/workspaces/:id/groups/:groupId', writeLimiter, deleteGroup)
-router.get('/workspaces/:id/notes', readLimiterLow, listNotes)
-router.post('/workspaces/:id/notes', writeLimiter, idempotencyNote, createNote)
-router.patch('/notes/:id', writeLimiter, updateNote)
-router.post('/notes/:id/toggle-pin', writeLimiter, togglePin)
-router.patch('/notes/:id/public', writeLimiter, updateNotePublicStatus)
-router.delete('/notes/:id', writeLimiter, deleteNote)
-router.get('/notes/:id/versions', readLimiterDefault, listNoteVersions)
-router.get('/notes/:id/versions/:versionId', readLimiterDefault, getNoteVersion)
-router.post('/notes/:id/versions/:versionId/restore', writeLimiter, restoreNoteVersion)
-router.get('/notes/:id/attachments', readLimiterDefault, listNoteAttachments)
-router.post('/notes/:id/attachments', writeLimiter, createNoteAttachment)
-router.delete('/notes/:id/attachments/:attachmentId', writeLimiter, deleteNoteAttachment)
+router.get('/workspaces', listWorkspaces)
+router.post('/workspaces', idempotencyWorkspace, createWorkspace)
+router.patch('/workspaces/:id', updateWorkspace)
+router.delete('/workspaces/:id', deleteWorkspace)
+router.get('/workspaces/:id/members', listWorkspaceMembers)
+router.get('/workspaces/:id/invites', listWorkspaceInvites)
+router.delete('/workspaces/:id/members/:userId', removeWorkspaceMember)
+router.post('/workspaces/:id/invites', idempotencyInvite, createInvite)
+router.post('/invites/:token/accept', acceptInvite)
+router.post('/invites/:token/decline', declineInvite)
+router.get('/workspaces/:id/groups', listGroups)
+router.post('/workspaces/:id/groups', idempotencyGroup, createGroup)
+router.delete('/workspaces/:id/groups/:groupId', deleteGroup)
+router.get('/workspaces/:id/notes', listNotes)
+router.post('/workspaces/:id/notes', idempotencyNote, createNote)
+router.get('/notes/:id', getNote)
+router.patch('/notes/:id', updateNote)
+router.post('/notes/:id/toggle-pin', togglePin)
+router.patch('/notes/:id/public', updateNotePublicStatus)
+router.delete('/notes/:id', deleteNote)
+router.get('/notes/:id/versions', listNoteVersions)
+router.get('/notes/:id/versions/:versionId', getNoteVersion)
+router.post('/notes/:id/versions/:versionId/restore', restoreNoteVersion)
+router.get('/notes/:id/attachments', listNoteAttachments)
+router.post('/notes/:id/attachments', createNoteAttachment)
+router.delete('/notes/:id/attachments/:attachmentId', deleteNoteAttachment)
+router.get('/ably/auth', readLimiterLow, createAblyToken)
+router.get('/workspaces/:id/chat/messages', listChatMessages)
+router.get('/workspaces/:id/chat/mentions', listChatMentions)
+router.get('/workspaces/:id/chat/audits', listChatAudits)
+router.get('/workspaces/:id/chat/unread', getChatUnreadCounts)
+router.post('/workspaces/:id/chat/messages', createChatMessage)
+router.patch('/workspaces/:id/chat/messages/:messageId', updateChatMessage)
+router.delete('/workspaces/:id/chat/messages/:messageId', deleteChatMessage)
+router.post('/workspaces/:id/chat/messages/:messageId/reactions', createChatReaction)
+router.delete('/workspaces/:id/chat/messages/:messageId/reactions/:emoji', deleteChatReaction)
+router.post('/workspaces/:id/chat/mentions/read', markChatMentionsRead)
+router.post('/workspaces/:id/chat/uploads', createChatUpload)
+router.post('/workspaces/:id/chat/events', requireAdmin, publishChatEvent)
 
 // AI endpoints (scaffold)
 import { ingestNote, askWorkspace, streamWorkspace, debugAi } from '../controllers/aiController.js'
 
-router.post('/ai/ingest', writeLimiter, ingestNote)
-router.post('/ai/ask', readLimiterDefault, askWorkspace)
-router.post('/ai/stream', readLimiterDefault, streamWorkspace)
-router.post('/ai/debug', readLimiterDefault, debugAi)
+router.post('/ai/ingest', ingestNote)
+router.post('/ai/ask', askWorkspace)
+router.post('/ai/stream', streamWorkspace)
+router.post('/ai/debug', requireAdmin, debugAi)
 
 export { router as apiRouter }

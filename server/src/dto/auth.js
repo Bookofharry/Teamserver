@@ -6,6 +6,17 @@ export const signupSchema = z.object({
   password: z.string().min(8),
 })
 
+export const signupRequestSchema = z.object({
+  email: z.string().trim().email('Valid email is required'),
+})
+
+export const signupVerifySchema = z.object({
+  name: z.string().trim().min(1),
+  email: z.string().trim().email('Valid email is required'),
+  password: z.string().min(8),
+  code: z.string().trim().min(6).max(6),
+})
+
 export const loginSchema = z.object({
   email: z.string().trim().email('Valid email is required'),
   password: z.string().min(8),
@@ -24,8 +35,9 @@ export const updateMeSchema = z
   .object({
     name: z.string().trim().min(1).optional(),
     avatar: z.string().trim().optional(),
+    lastWorkspaceId: z.string().trim().uuid().optional(),
   })
-  .refine((data) => data.name !== undefined || data.avatar !== undefined, {
+  .refine((data) => data.name !== undefined || data.avatar !== undefined || data.lastWorkspaceId !== undefined, {
     message: 'No fields to update',
   })
 

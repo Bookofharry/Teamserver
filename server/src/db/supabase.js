@@ -47,5 +47,6 @@ export const handleSupabaseError = (res, error, message = 'Database error') => {
   const ser = serializeError(error)
   logger.error({ supabase: ser, message }, 'Supabase error')
   // Avoid leaking internal error details in production responses
+  if (res.headersSent) return null
   return res.status(500).json({ error: { code: 'database_error', message } })
 }

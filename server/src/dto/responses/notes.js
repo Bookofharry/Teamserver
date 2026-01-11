@@ -6,6 +6,7 @@ const noteResponseSchema = z.object({
   id: z.string(),
   title: z.string(),
   body: z.string(),
+  bodyPreview: z.string().optional(),
   workspaceId: z.string(),
   groupId: z.string(),
   tags: z.array(z.string()),

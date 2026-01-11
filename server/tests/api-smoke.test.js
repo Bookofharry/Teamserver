@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, beforeAll, afterAll, describe, expect, it, vi } from 'vitest'
 import request from 'supertest'
 import bcrypt from 'bcrypt'
 
@@ -8,6 +8,8 @@ const workspaceId = 'ws-1'
 const groupId = 'group-1'
 let supabaseMock
 let app
+let server
+let baseUrl
 
 const createSupabaseMock = () => {
   const passwordHash = bcrypt.hashSync('password123', 8)
@@ -175,6 +177,7 @@ const createSupabaseMock = () => {
         state.range = { from, to }
         return builder
       },
+      limit: () => builder,
       single: () => {
         state.method = 'single'
         return builder
@@ -237,6 +240,7 @@ vi.mock('../src/auth/supabaseAuth.js', () => ({
     secure: false,
     path: '/',
   }),
+  getAuthTokenTtlSeconds: () => 3600,
   getAuthCookieName: () => 'teampad_session',
 }))
 
@@ -246,13 +250,20 @@ vi.mock('../src/utils/email.js', () => ({
   sendPasswordResetEmail: async () => ({ sent: false, reason: 'test' }),
 }))
 
-const getApp = async () => {
-  if (!app) {
-    const mod = await import('../src/app.js')
-    app = mod.app
+beforeAll(async () => {
+  const mod = await import('../src/app.js')
+  app = mod.app
+  server = app.listen(0, '127.0.0.1')
+  await new Promise((resolve) => server.once('listening', resolve))
+  const address = server.address()
+  baseUrl = `http://127.0.0.1:${address.port}`
+})
+
+afterAll(async () => {
+  if (server) {
+    await new Promise((resolve) => server.close(resolve))
   }
-  return app
-}
+})
 
 beforeEach(() => {
   supabaseMock = createSupabaseMock()
@@ -260,8 +271,7 @@ beforeEach(() => {
 
 describe('API smoke', () => {
   it('creates a session and sets a cookie', async () => {
-    const target = await getApp()
-    const res = await request(target)
+    const res = await request(baseUrl)
       .post('/v1/auth/login')
       .send({ email: 'test@example.com', password: 'password123' })
     expect(res.status).toBe(200)
@@ -269,8 +279,7 @@ describe('API smoke', () => {
   })
 
   it('creates a note', async () => {
-    const target = await getApp()
-    const res = await request(target)
+    const res = await request(baseUrl)
       .post(`/v1/workspaces/${workspaceId}/notes`)
       .send({ groupId, title: 'Hello', body: 'World' })
     expect(res.status).toBe(201)
@@ -278,8 +287,7 @@ describe('API smoke', () => {
   })
 
   it('creates a workspace invite', async () => {
-    const target = await getApp()
-    const res = await request(target)
+    const res = await request(baseUrl)
       .post(`/v1/workspaces/${workspaceId}/invites`)
       .send({ email: 'new@example.com', role: 'member' })
     expect(res.status).toBe(201)

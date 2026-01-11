@@ -13,8 +13,10 @@ import { sendWorkspaceInviteEmail } from '../utils/email.js'
 import { isHigherPlan, normalizePlan, resolvePlanForUser } from '../utils/plan.js'
 import { logEvent } from '../utils/events.js'
 import logger from '../utils/logger.js'
+import { publishChatRoomEvent } from '../utils/ablyChat.js'
 import { parseBody } from '../utils/validation.js'
 import { createInviteSchema, createWorkspaceSchema, updateWorkspaceSchema } from '../dto/workspaces.js'
+import { toChatMessageResponse } from '../dto/responses/chat.js'
 import {
   toAcceptInviteResponse,
   toDeleteWorkspaceResponse,
@@ -137,7 +139,7 @@ export const createWorkspace = async (req, res) => {
     })
   }
 
-  const name = sanitizeName(input.name || '') || 'Untitled Workspace'
+  const name = sanitizeName(input.name || '')
 
   const { data: workspaceRow, error: workspaceError } = await supabase
     .rpc('create_workspace_with_defaults', {
@@ -147,6 +149,10 @@ export const createWorkspace = async (req, res) => {
     .single()
 
   if (workspaceError) {
+    logger.error(
+      { error: workspaceError, userId: req.auth.userId, name },
+      'Workspace creation RPC failed',
+    )
     return handleSupabaseError(res, workspaceError, 'Failed to create workspace')
   }
 
@@ -728,6 +734,17 @@ export const acceptInvite = async (req, res) => {
     return handleSupabaseError(res, profileError, 'Failed to sync profile')
   }
 
+  const { data: existingMember, error: existingMemberError } = await supabase
+    .from('workspace_members')
+    .select('id')
+    .eq('workspace_id', invite.workspace_id)
+    .eq('user_id', req.auth.userId)
+    .maybeSingle()
+
+  if (existingMemberError) {
+    return handleSupabaseError(res, existingMemberError, 'Failed to check membership')
+  }
+
   const { error: membershipError } = await supabase.from('workspace_members').upsert(
     {
       workspace_id: invite.workspace_id,
@@ -749,6 +766,53 @@ export const acceptInvite = async (req, res) => {
     action: 'invite.accepted',
     metadata: { inviteId: invite.id, role: invite.role },
   })
+
+  if (!existingMember) {
+    const { data: profileRow } = await supabase
+      .from('profiles')
+      .select('id, full_name, email, avatar_url, plan, is_subscribed')
+      .eq('id', req.auth.userId)
+      .maybeSingle()
+
+    const displayName = profileRow?.full_name || profileRow?.email?.split('@')[0] || 'A member'
+    const body = `${displayName} joined the workspace`
+
+    const { data: systemRow, error: systemError } = await supabase
+      .from('workspace_messages')
+      .insert({
+        workspace_id: invite.workspace_id,
+        sender_id: req.auth.userId,
+        body,
+        message_type: 'system',
+      })
+      .select('id, workspace_id, sender_id, body, message_type, created_at, edited_at, deleted_at')
+      .single()
+
+    if (systemError) {
+      logger.warn({ error: systemError?.message || systemError }, 'Failed to create join message')
+    } else if (systemRow) {
+      const payload = toChatMessageResponse({
+        id: systemRow.id,
+        workspaceId: systemRow.workspace_id,
+        body: systemRow.body || '',
+        messageType: systemRow.message_type,
+        createdAt: systemRow.created_at,
+        editedAt: systemRow.edited_at ?? null,
+        deletedAt: systemRow.deleted_at ?? null,
+        sender: mapProfileRow(profileRow || { id: req.auth.userId }),
+        attachments: [],
+        reactions: [],
+        mentions: [],
+      })
+      const publishResult = await publishChatRoomEvent(`workspace:${invite.workspace_id}`, {
+        type: 'message.created',
+        message: payload,
+      })
+      if (!publishResult.sent) {
+        logger.warn({ reason: publishResult.reason }, 'Join message publish skipped')
+      }
+    }
+  }
 
   res.json({
     data: toAcceptInviteResponse({
