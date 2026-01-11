@@ -4,7 +4,6 @@ import cookieParser from 'cookie-parser'
 import express from 'express'
 import { apiRouter } from './routes/api.js'
 import logger from './utils/logger.js'
-import { csrfMiddleware } from './middleware/csrf.js'
 import requestIdMiddleware from './middleware/requestId.js'
 
 const app = express()
@@ -15,8 +14,8 @@ app.set('trust proxy', true)
 const corsBaseOptions = {
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-CSRF-Token'],
-  exposedHeaders: ['X-CSRF-Token'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
+  exposedHeaders: [],
 }
 
 app.use(cors({ ...corsBaseOptions, origin: true }))
@@ -27,7 +26,6 @@ app.use(express.json({ limit: bodyLimit }))
 app.use(express.urlencoded({ extended: true, limit: bodyLimit }))
 app.use(cookieParser())
 app.use(requestIdMiddleware)
-app.use(csrfMiddleware)
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' })

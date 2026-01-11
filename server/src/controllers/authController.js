@@ -8,7 +8,7 @@ import {
   getAuthTokenTtlSeconds,
   getAuthCookieName,
 } from '../auth/supabaseAuth.js'
-import { clearCsrfCookie, ensureCsrfCookie } from '../middleware/csrf.js'
+import { clearCsrfCookie } from '../middleware/csrf.js'
 import { isValidEmail, sanitizeEmail, sanitizeName, sanitizeText } from '../utils/sanitize.js'
 import { isHigherPlan, resolvePlanForUser } from '../utils/plan.js'
 import { parseBody } from '../utils/validation.js'
@@ -394,7 +394,6 @@ export const refreshSession = async (req, res) => {
     exp: Math.floor(Date.now() / 1000) + getAuthTokenTtlSeconds(),
   })
   res.cookie(getAuthCookieName(), token, cookieOptions)
-  ensureCsrfCookie(req, res)
   res.setHeader('Cache-Control', 'no-store')
   return res.json({ data: toSessionResponse({ userId: req.auth.userId, email: req.auth.email }) })
 }

@@ -16,7 +16,6 @@ import {
 import { createUpgradeIntent } from '../controllers/billingController.js'
 import { createIdempotencyMiddleware } from '../middleware/idempotency.js'
 import { requireAdmin } from '../middleware/admin.js'
-import { ensureCsrfCookie } from '../middleware/csrf.js'
 import { listAdminUsers, updateAdminUserPlan } from '../controllers/adminController.js'
 import {
   acceptInvite,
@@ -100,11 +99,6 @@ router.post('/auth/login', authLimiter, login)
 router.post('/auth/logout', authLimiter, clearSession)
 router.post('/auth/forgot-password', forgotPassword)
 router.post('/auth/reset-password', resetPassword)
-router.get('/csrf', publicLimiter, (req, res) => {
-  const token = ensureCsrfCookie(req, res)
-  res.setHeader('Cache-Control', 'no-store')
-  res.json({ data: { token } })
-})
 router.get('/invites/:token', publicLimiter, getInviteInfo)
 router.get('/public/notes/:slug', publicLimiter, getPublicNote)
 
