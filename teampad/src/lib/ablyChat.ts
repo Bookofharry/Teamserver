@@ -1,0 +1,129 @@
+import Ably from "ably";
+
+const DEFAULT_API_URL = "https://teamserver.vercel.app/api";
+
+export const getAblyKey = () => import.meta.env.VITE_ABLY_KEY as string | undefined;
+
+export const getAblyAuthUrl = () => {
+  const explicit = import.meta.env.VITE_ABLY_AUTH_URL as string | undefined;
+  if (explicit) return explicit;
+  const apiUrl = (import.meta.env.VITE_API_URL as string | undefined) || DEFAULT_API_URL;
+  return `${apiUrl}/ably/auth`;
+};
+
+const getAuthRefreshUrl = () => {
+  const authUrl = getAblyAuthUrl();
+  if (authUrl.endsWith("/ably/auth")) {
+    return authUrl.replace(/\/ably\/auth$/, "/auth/refresh");
+  }
+  const apiUrl = (import.meta.env.VITE_API_URL as string | undefined) || DEFAULT_API_URL;
+  return `${apiUrl}/auth/refresh`;
+};
+
+export const isAblyChatEnabled = () => {
+  const flag = import.meta.env.VITE_ABLY_CHAT as string | undefined;
+  if (!flag) return true;
+  return flag === "true";
+};
+
+let ablyDisabled = false;
+let realtimeClient: Ably.Realtime | null = null;
+const roomPromises = new Map<string, Promise<Ably.Types.RealtimeChannel>>();
+
+const createRealtimeClient = () => {
+  const ablyKey = getAblyKey();
+  const authUrl = getAblyAuthUrl();
+  if (ablyDisabled || (!ablyKey && !authUrl)) return null;
+  if (ablyKey) {
+    return new Ably.Realtime({ key: ablyKey });
+  }
+  return new Ably.Realtime({
+    authCallback: async (_tokenParams, callback) => {
+      if (ablyDisabled) {
+        callback(new Error("Ably disabled"), null);
+        return;
+      }
+      try {
+        let res = await fetch(authUrl, { credentials: "include", cache: "no-store" });
+        if (res.status === 401) {
+          const refreshUrl = getAuthRefreshUrl();
+          await fetch(refreshUrl, { credentials: "include", cache: "no-store" }).catch(() => {});
+          res = await fetch(authUrl, { credentials: "include", cache: "no-store" });
+        }
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null);
+          if (payload?.error?.code === "ably_missing") {
+            ablyDisabled = true;
+          }
+          callback(new Error("Ably auth failed"), null);
+          return;
+        }
+        const tokenRequest = await res.json();
+        callback(null, tokenRequest);
+      } catch (error) {
+        callback(error as Error, null);
+      }
+    },
+  });
+};
+
+export const getRealtimeClient = () => {
+  if (realtimeClient) return realtimeClient;
+  const client = createRealtimeClient();
+  if (!client) return null;
+  realtimeClient = client;
+  return realtimeClient;
+};
+
+export const getChatClient = () => getRealtimeClient();
+
+export const getWorkspaceRoomName = (workspaceId: string) => `workspace:${workspaceId}`;
+
+export const getChatRoom = async (roomName: string) => {
+  const existing = roomPromises.get(roomName);
+  if (existing) return existing;
+
+  const client = getRealtimeClient();
+  if (!client) return null;
+  const roomPromise = Promise.resolve(client.channels.get(roomName));
+
+  roomPromises.set(roomName, roomPromise);
+  try {
+    return await roomPromise;
+  } catch (error) {
+    roomPromises.delete(roomName);
+    throw error;
+  }
+};
+
+export const subscribeToChatRoomMessages = async (
+  roomName: string,
+  onMessage: (event: Ably.Types.Message) => void,
+) => {
+  const room = await getChatRoom(roomName);
+  if (!room) return null;
+  const client = getRealtimeClient();
+  room.subscribe(onMessage);
+  return () => {
+    room.unsubscribe(onMessage);
+    roomPromises.delete(roomName);
+    if (client) {
+      const channel = client.channels.get(roomName);
+      // Only release when safe; avoid releasing while attaching to prevent Ably errors.
+      if (channel.state === "attached") {
+        channel.detach(() => {
+          client.channels.release(roomName);
+        });
+      } else if (channel.state === "initialized" || channel.state === "detached" || channel.state === "failed") {
+        client.channels.release(roomName);
+      }
+    }
+  };
+};
+
+export const publishChatEvent = async (roomName: string, payload: Record<string, unknown>) => {
+  const room = await getChatRoom(roomName);
+  if (!room) return false;
+  await room.publish("chat-event", payload);
+  return true;
+};
