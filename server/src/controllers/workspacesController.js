@@ -319,7 +319,7 @@ export const listWorkspaceInvites = async (req, res) => {
     .eq('workspace_id', id)
     .lt('expires_at', now)
 
-    if (cleanupError) {
+  if (cleanupError) {
     logger.warn({ error: cleanupError?.message || cleanupError }, 'Failed to cleanup expired workspace invites')
   }
 
@@ -536,6 +536,66 @@ export const removeWorkspaceMember = async (req, res) => {
   res.json({ data: toRemoveMemberResponse({ workspaceId: id, userId }) })
 }
 
+export const leaveWorkspace = async (req, res) => {
+  const { id } = req.params
+  const supabase = getSupabaseAdmin()
+
+  const { data: memberRow, error: memberError } = await supabase
+    .from('workspace_members')
+    .select('role')
+    .eq('workspace_id', id)
+    .eq('user_id', req.auth.userId)
+    .maybeSingle()
+
+  if (memberError) {
+    return handleSupabaseError(res, memberError, 'Failed to check membership')
+  }
+
+  if (!memberRow) {
+    return res.status(404).json({ error: { code: 'not_member', message: 'Not a member of this workspace' } })
+  }
+
+  if (memberRow.role === 'owner') {
+    const { count, error: countError } = await supabase
+      .from('workspace_members')
+      .select('id', { count: 'exact', head: true })
+      .eq('workspace_id', id)
+      .eq('role', 'owner')
+
+    if (countError) {
+      return handleSupabaseError(res, countError, 'Failed to verify owners')
+    }
+
+    if ((count || 0) <= 1) {
+      return res.status(400).json({
+        error: {
+          code: 'last_owner',
+          message: 'The last owner cannot leave. Delete the workspace or transfer ownership first.',
+        },
+      })
+    }
+  }
+
+  const { error: deleteError } = await supabase
+    .from('workspace_members')
+    .delete()
+    .eq('workspace_id', id)
+    .eq('user_id', req.auth.userId)
+
+  if (deleteError) {
+    return handleSupabaseError(res, deleteError, 'Failed to leave workspace')
+  }
+
+  await logEvent(supabase, {
+    userId: req.auth.userId,
+    workspaceId: id,
+    action: 'member.left',
+    metadata: { role: memberRow.role },
+  })
+
+  res.json({ data: { left: true, workspaceId: id } })
+}
+
 export const createInvite = async (req, res) => {
   const { id } = req.params
   const supabase = getSupabaseAdmin()
@@ -657,7 +717,7 @@ export const createInvite = async (req, res) => {
   const appUrl = (process.env.APP_URL || '').trim().replace(/\/$/, '')
   const inviteUrl = appUrl ? `${appUrl}/invite/${data.token}` : null
 
-    if (inviteUrl) {
+  if (inviteUrl) {
     if (process.env.NODE_ENV !== 'production') {
       logger.info({ email: data.email, workspaceId: id }, 'Invite link generated')
     }

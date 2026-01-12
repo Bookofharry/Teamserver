@@ -29,6 +29,7 @@ import {
   listWorkspaceInvites,
   listWorkspaces,
   removeWorkspaceMember,
+  leaveWorkspace,
   updateWorkspace,
 } from '../controllers/workspacesController.js'
 import { createGroup, deleteGroup, listGroups } from '../controllers/groupsController.js'
@@ -123,6 +124,7 @@ router.delete('/workspaces/:id', deleteWorkspace)
 router.get('/workspaces/:id/members', listWorkspaceMembers)
 router.get('/workspaces/:id/invites', listWorkspaceInvites)
 router.delete('/workspaces/:id/members/:userId', removeWorkspaceMember)
+router.post('/workspaces/:id/leave', leaveWorkspace)
 router.post('/workspaces/:id/invites', idempotencyInvite, createInvite)
 router.post('/invites/:token/accept', acceptInvite)
 router.post('/invites/:token/decline', declineInvite)

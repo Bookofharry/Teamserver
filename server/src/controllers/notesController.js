@@ -145,7 +145,7 @@ export const listNotes = async (req, res) => {
   const isDeletedParam = req.query?.isDeleted || req.query?.isdeleted
   const isDeleted = String(isDeletedParam) === 'true'
 
-  console.log(`[listNotes] Request: groupId=${groupId} isDeleted=${isDeleted} (raw=${isDeletedParam})`)
+  console.log(`[🔮] The spirits are whispering... group=${groupId || 'void'} deleted=${isDeleted} raw=${isDeletedParam}`)
 
   const supabase = getSupabaseAdmin()
   const { from, to } = parsePagination(req, { defaultLimit: 50, maxLimit: 100 })

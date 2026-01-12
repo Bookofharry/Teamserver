@@ -68,7 +68,7 @@ const ensureAiAccess = async (req, res) => {
         authPlan: planContext.authPlan,
         isSubscribed: planContext.isSubscribed,
       },
-      'AI access denied',
+      'The gatekeeper says NO.',
     )
     res.status(403).json({
       error: { code: 'plan_limit', message: 'Upgrade to Premium+ to use TeamPad AI.' },
@@ -88,7 +88,7 @@ export async function ingestNote(req, res) {
   const contentLength = content.length
   logger.info(
     { userId: req.auth.userId, noteId, workspaceId, contentLength, version: version || 1 },
-    'AI ingest started',
+    'Feeding the machine...',
   )
 
   const supabase = getSupabaseAdmin()
@@ -120,7 +120,7 @@ export async function ingestNote(req, res) {
     await upsertVectors(rows)
     logger.info(
       { userId: req.auth.userId, noteId, workspaceId, chunkCount: rows.length },
-      'AI ingest completed',
+      'The machine is satiated.',
     )
     return res.status(200).json({ data: toAiIngestResponse({ ok: true, count: rows.length }) })
   } catch (err) {
@@ -139,7 +139,7 @@ export async function askWorkspace(req, res) {
     const startedAt = Date.now()
     logger.info(
       { userId: req.auth.userId, workspaceId, promptLength: String(prompt).length },
-      'AI ask started',
+      'Consulting the digital oracle...',
     )
     const promptWithContext =
       `${AI_TONE_GUIDE}\n\n` +
@@ -155,7 +155,7 @@ export async function askWorkspace(req, res) {
         answerLength: text?.length || 0,
         durationMs: Date.now() - startedAt,
       },
-      'AI ask completed',
+      'The oracle has spoken.',
     )
     return res.status(200).json({ data: toAiAskResponse({ answer: text, sources: [] }) })
   } catch (err) {
@@ -185,7 +185,7 @@ export async function streamWorkspace(req, res) {
     const startedAt = Date.now()
     logger.info(
       { userId: req.auth.userId, workspaceId, promptLength: String(prompt).length },
-      'AI stream started',
+      'Opening the neural conduit...',
     )
     const promptWithContext =
       `${AI_TONE_GUIDE}\n\n` +
@@ -222,7 +222,7 @@ export async function streamWorkspace(req, res) {
         charCount,
         durationMs: Date.now() - startedAt,
       },
-      'AI stream completed',
+      'Neural link severed.',
     )
     // Done
     res.write('event: end\ndata: done\n\n')
