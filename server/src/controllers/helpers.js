@@ -37,6 +37,7 @@ export const mapNoteRow = (row, profile) => {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     updatedBy: mapProfileRow(fallbackProfile),
+    deletedAt: row.deleted_at ?? null,
   }
 }
 

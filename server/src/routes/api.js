@@ -36,13 +36,16 @@ import {
   createNote,
   createNoteAttachment,
   deleteNote,
+  deleteNotePermanently,
   deleteNoteAttachment,
+  listTrashNotes,
   getNoteVersion,
   getPublicNote,
   listNoteAttachments,
   listNoteVersions,
   listNotes,
   getNote,
+  restoreNote,
   restoreNoteVersion,
   togglePin,
   updateNote,
@@ -133,6 +136,9 @@ router.patch('/notes/:id', updateNote)
 router.post('/notes/:id/toggle-pin', togglePin)
 router.patch('/notes/:id/public', updateNotePublicStatus)
 router.delete('/notes/:id', deleteNote)
+router.delete('/notes/:id/permanent', deleteNotePermanently)
+router.get('/workspaces/:id/trash', listTrashNotes)
+router.post('/notes/:id/restore', restoreNote)
 router.get('/notes/:id/versions', listNoteVersions)
 router.get('/notes/:id/versions/:versionId', getNoteVersion)
 router.post('/notes/:id/versions/:versionId/restore', restoreNoteVersion)

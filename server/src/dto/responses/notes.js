@@ -18,6 +18,7 @@ const noteResponseSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   updatedBy: userResponseSchema,
+  deletedAt: z.string().nullable().optional(),
 })
 
 const publicNoteResponseSchema = z.object({

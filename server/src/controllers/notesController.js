@@ -141,6 +141,12 @@ export const listNotes = async (req, res) => {
   const groupId = sanitizeText(req.query?.groupId || '')
   const rawQuery = sanitizeText(req.query?.query || '')
   const searchQuery = rawQuery.replace(/[,%]/g, ' ').trim()
+  // Ensure we handle both string 'true' and boolean true
+  const isDeletedParam = req.query?.isDeleted || req.query?.isdeleted
+  const isDeleted = String(isDeletedParam) === 'true'
+
+  console.log(`[listNotes] Request: groupId=${groupId} isDeleted=${isDeleted} (raw=${isDeletedParam})`)
+
   const supabase = getSupabaseAdmin()
   const { from, to } = parsePagination(req, { defaultLimit: 50, maxLimit: 100 })
 
@@ -148,10 +154,17 @@ export const listNotes = async (req, res) => {
 
   let query = supabase
     .from('notes')
-    .select('id, title, body, workspace_id, group_id, tags, is_pinned, is_public, public_slug, public_published_at, public_expires_at, created_at, updated_at, updated_by_id')
+    .select('id, title, body, workspace_id, group_id, tags, is_pinned, is_public, public_slug, public_published_at, public_expires_at, deleted_at, created_at, updated_at, updated_by_id')
     .eq('workspace_id', id)
-    .is('deleted_at', null)
     .order('updated_at', { ascending: false })
+
+  if (isDeleted) {
+    // Show ONLY deleted notes (where deleted_at is NOT null)
+    query = query.not('deleted_at', 'is', null)
+  } else {
+    // Show ONLY active notes (where deleted_at IS null)
+    query = query.is('deleted_at', null)
+  }
 
   if (groupId && !searchQuery) {
     query = query.eq('group_id', groupId)
@@ -197,6 +210,45 @@ export const listNotes = async (req, res) => {
     const mapped = mapNoteRow(note, profilesMap.get(note.updated_by_id))
     const bodyPreview = buildPreview(mapped.body)
     return toNoteResponse({ ...mapped, body: '', bodyPreview })
+  })
+  res.json({ data })
+}
+
+export const listTrashNotes = async (req, res) => {
+  const { id } = req.params
+  const supabase = getSupabaseAdmin()
+  const { from, to } = parsePagination(req, { defaultLimit: 50, maxLimit: 100 })
+
+  if (!(await requireWorkspaceMember(req, res, id))) return
+
+  // Show ONLY deleted notes (where deleted_at is NOT null)
+  let query = supabase
+    .from('notes')
+    .select('id, title, body, workspace_id, group_id, tags, is_pinned, is_public, public_slug, public_published_at, public_expires_at, deleted_at, created_at, updated_at, updated_by_id')
+    .eq('workspace_id', id)
+    .not('deleted_at', 'is', null) // FILTER FOR TRASH
+    .order('deleted_at', { ascending: false })
+
+  const { data: noteRows, error } = await query.range(from, to)
+
+  if (error) {
+    return handleSupabaseError(res, error, 'Failed to load trash notes')
+  }
+
+  const updaterIds = Array.from(
+    new Set(noteRows.map((note) => note.updated_by_id).filter(Boolean)),
+  )
+
+  let profilesMap = new Map()
+  try {
+    profilesMap = await getProfilesMap(supabase, updaterIds)
+  } catch (profileError) {
+    return handleSupabaseError(res, profileError, 'Failed to load note authors')
+  }
+
+  const data = noteRows.map((note) => {
+    const mapped = mapNoteRow(note, profilesMap.get(note.updated_by_id))
+    return toNoteResponse({ ...mapped, body: '' }) // No body needed for list
   })
   res.json({ data })
 }
@@ -269,10 +321,10 @@ export const createNote = async (req, res) => {
   const body = sanitizeBody(input.body || '')
   const tags = Array.isArray(input.tags)
     ? input.tags
-        .filter((tag) => typeof tag === 'string')
-        .map((tag) => sanitizeTag(tag))
-        .filter(Boolean)
-        .slice(0, 8)
+      .filter((tag) => typeof tag === 'string')
+      .map((tag) => sanitizeTag(tag))
+      .filter(Boolean)
+      .slice(0, 8)
     : []
   const uniqueTags = Array.from(new Set(tags))
 
@@ -500,6 +552,77 @@ export const deleteNote = async (req, res) => {
 
   if (deleteError) {
     return handleSupabaseError(res, deleteError, 'Failed to delete note')
+  }
+
+  res.json({ data: { id: noteId } })
+}
+
+export const deleteNotePermanently = async (req, res) => {
+  const supabase = getSupabaseAdmin()
+  const noteId = req.params.id
+
+  // 1. Fetch note to get workspaceId
+  const { data: noteRow, error: noteError } = await supabase
+    .from('notes')
+    .select('id, workspace_id')
+    .eq('id', noteId)
+    .maybeSingle()
+
+  if (noteError) return handleSupabaseError(res, noteError, 'Failed to load note')
+  if (!noteRow) return res.status(404).json({ error: { code: 'not_found', message: 'Note not found' } })
+
+  // 2. Security Check: Must be Admin or Owner
+  const member = await requireWorkspaceRole(req, res, noteRow.workspace_id, ['admin', 'owner'])
+  if (!member) return // Response handled by helper
+
+  const { error } = await supabase
+    .from('notes')
+    .delete()
+    .eq('id', noteId)
+
+  if (error) {
+    return handleSupabaseError(res, error, 'Failed to permanently delete note')
+  }
+
+  res.json({ data: { id: noteId, success: true } })
+}
+
+export const restoreNote = async (req, res) => {
+  const supabase = getSupabaseAdmin()
+  const noteId = req.params.id
+
+  const { data: noteRow, error: noteError } = await supabase
+    .from('notes')
+    .select('id, workspace_id, deleted_at')
+    .eq('id', noteId)
+    .maybeSingle()
+
+  if (noteError) {
+    return handleSupabaseError(res, noteError, 'Failed to load note')
+  }
+
+  if (!noteRow) {
+    return res.status(404).json({ error: { code: 'not_found', message: 'Note not found' } })
+  }
+
+  if (!noteRow.deleted_at) {
+    // Already restored, return success (Idempotency)
+    return res.json({ data: { id: noteId, alreadyRestored: true } })
+  }
+
+  if (!(await requireWorkspaceMember(req, res, noteRow.workspace_id))) return
+
+  const { error: restoreError } = await supabase
+    .from('notes')
+    .update({
+      deleted_at: null,
+      updated_at: new Date().toISOString(),
+      updated_by_id: req.auth.userId,
+    })
+    .eq('id', noteId)
+
+  if (restoreError) {
+    return handleSupabaseError(res, restoreError, 'Failed to restore note')
   }
 
   res.json({ data: { id: noteId } })
