@@ -17,7 +17,7 @@ const mentionSchema = z.object({
 export const createChatMessageSchema = z
   .object({
     body: z.string().max(2000).optional(),
-    messageType: z.enum(['text', 'image']).default('text'),
+    messageType: z.enum(['text', 'image', 'audio']).default('text'),
     attachments: z.array(attachmentSchema).max(6).optional(),
     mentions: z.array(mentionSchema).max(20).optional(),
   })

@@ -162,21 +162,21 @@ export const listChatMessages = async (req, res) => {
   const [attachmentsResult, reactionsResult, mentionsResult] = await Promise.all([
     messageIds.length
       ? supabase
-          .from('workspace_message_attachments')
-          .select('id, message_id, workspace_id, uploader_id, file_path, file_name, content_type, size, created_at')
-          .in('message_id', messageIds)
+        .from('workspace_message_attachments')
+        .select('id, message_id, workspace_id, uploader_id, file_path, file_name, content_type, size, created_at')
+        .in('message_id', messageIds)
       : { data: [], error: null },
     messageIds.length
       ? supabase
-          .from('workspace_message_reactions')
-          .select('id, message_id, workspace_id, user_id, emoji, created_at')
-          .in('message_id', messageIds)
+        .from('workspace_message_reactions')
+        .select('id, message_id, workspace_id, user_id, emoji, created_at')
+        .in('message_id', messageIds)
       : { data: [], error: null },
     messageIds.length
       ? supabase
-          .from('workspace_message_mentions')
-          .select('id, message_id, workspace_id, mentioned_user_id, mention_text, start_index, end_index, created_at')
-          .in('message_id', messageIds)
+        .from('workspace_message_mentions')
+        .select('id, message_id, workspace_id, mentioned_user_id, mention_text, start_index, end_index, created_at')
+        .in('message_id', messageIds)
       : { data: [], error: null },
   ])
 
@@ -255,8 +255,8 @@ export const createChatMessage = async (req, res) => {
     return res.status(400).json({ error: { code: 'invalid_request', message: 'Message body is required' } })
   }
 
-  if (messageType === 'image' && attachments.length === 0) {
-    return res.status(400).json({ error: { code: 'invalid_request', message: 'Image attachment is required' } })
+  if ((messageType === 'image' || messageType === 'audio') && attachments.length === 0) {
+    return res.status(400).json({ error: { code: 'invalid_request', message: `${messageType} attachment is required` } })
   }
 
   const sanitizedAttachments = attachments.map((attachment) => ({
@@ -267,10 +267,15 @@ export const createChatMessage = async (req, res) => {
   }))
 
   const invalidAttachment = sanitizedAttachments.find(
-    (attachment) => attachment.contentType && !attachment.contentType.startsWith('image/'),
+    (attachment) => {
+      const type = attachment.contentType || ''
+      if (messageType === 'image') return !type.startsWith('image/')
+      if (messageType === 'audio') return !type.startsWith('audio/')
+      return false
+    }
   )
   if (invalidAttachment) {
-    return res.status(400).json({ error: { code: 'invalid_request', message: 'Only image attachments are allowed' } })
+    return res.status(400).json({ error: { code: 'invalid_request', message: `Invalid attachment type for ${messageType} message` } })
   }
 
   const { data: messageRow, error } = await supabase
@@ -677,8 +682,8 @@ export const createChatUpload = async (req, res) => {
 
   if (!(await requireWorkspaceMember(req, res, workspaceId))) return
 
-  if (!input.contentType.startsWith('image/')) {
-    return res.status(400).json({ error: { code: 'invalid_request', message: 'Only images are allowed' } })
+  if (!input.contentType.startsWith('image/') && !input.contentType.startsWith('audio/')) {
+    return res.status(400).json({ error: { code: 'invalid_request', message: 'Only images and audio files are allowed' } })
   }
   if (input.size && input.size > MAX_CHAT_UPLOAD_BYTES) {
     return res.status(400).json({ error: { code: 'invalid_request', message: 'Image exceeds upload size limit' } })

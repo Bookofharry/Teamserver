@@ -49,7 +49,7 @@ export const getMe = async (req, res) => {
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, full_name, avatar_url, is_subscribed, plan, last_workspace_id')
+    .select('id, email, full_name, avatar_url, is_subscribed, plan, last_workspace_id, status, status_emoji')
     .eq('id', req.auth.userId)
     .single()
 
@@ -91,11 +91,18 @@ export const updateMe = async (req, res) => {
     updates.last_workspace_id = input.lastWorkspaceId || null
   }
 
+  if (input.status !== undefined) {
+    updates.status = input.status || null
+  }
+  if (input.statusEmoji !== undefined) {
+    updates.status_emoji = input.statusEmoji || null
+  }
+
   const { data, error } = await supabase
     .from('profiles')
     .update(updates)
     .eq('id', req.auth.userId)
-    .select('id, email, full_name, avatar_url, is_subscribed, plan, last_workspace_id')
+    .select('id, email, full_name, avatar_url, is_subscribed, plan, last_workspace_id, status, status_emoji')
     .single()
 
   if (error) {

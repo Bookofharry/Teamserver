@@ -36,10 +36,20 @@ export const updateMeSchema = z
     name: z.string().trim().min(1).optional(),
     avatar: z.string().trim().optional(),
     lastWorkspaceId: z.string().trim().uuid().optional(),
+    status: z.string().trim().optional().nullable(),
+    statusEmoji: z.string().trim().optional().nullable(),
   })
-  .refine((data) => data.name !== undefined || data.avatar !== undefined || data.lastWorkspaceId !== undefined, {
-    message: 'No fields to update',
-  })
+  .refine(
+    (data) =>
+      data.name !== undefined ||
+      data.avatar !== undefined ||
+      data.lastWorkspaceId !== undefined ||
+      data.status !== undefined ||
+      data.statusEmoji !== undefined,
+    {
+      message: 'No fields to update',
+    }
+  )
 
 export const checkEmailSchema = z.object({
   email: z.string().trim().email('Valid email is required'),

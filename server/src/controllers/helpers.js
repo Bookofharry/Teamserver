@@ -18,6 +18,8 @@ export const mapProfileRow = (profile) => ({
   plan: normalizePlan(profile?.plan) || (profile?.is_subscribed ? 'premium' : 'free'),
   isSubscribed: normalizePlan(profile?.plan) ? normalizePlan(profile?.plan) !== 'free' : profile?.is_subscribed ?? false,
   lastWorkspaceId: profile?.last_workspace_id ?? null,
+  status: profile?.status || null,
+  statusEmoji: profile?.status_emoji || null,
 })
 
 export const mapNoteRow = (row, profile) => {

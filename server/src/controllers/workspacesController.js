@@ -233,7 +233,7 @@ export const listWorkspaceMembers = async (req, res) => {
 
   const { data: memberRows, error } = await supabase
     .from('workspace_members')
-    .select('id, role, user_id, workspace_id, created_at, profiles(id, full_name, email, avatar_url)')
+    .select('id, role, user_id, workspace_id, created_at, profiles(id, full_name, email, avatar_url, status, status_emoji)')
     .eq('workspace_id', id)
     .order('created_at', { ascending: true })
     .range(from, to)
