@@ -1,6 +1,6 @@
 import Ably from "ably";
 
-const DEFAULT_API_URL = "https://teamserver.vercel.app/api";
+
 
 export const getAblyKey = () => import.meta.env.VITE_ABLY_KEY as string | undefined;
 
@@ -8,8 +8,9 @@ export const getAblyAuthUrl = () => {
   const explicit = import.meta.env.VITE_ABLY_AUTH_URL as string | undefined;
   if (explicit) return explicit;
 
-  // In production, default to relative path to use the Same-Origin proxy
-  if (import.meta.env.PROD && !import.meta.env.VITE_API_URL) {
+  // Force relative path in browser to ensure Vercel Proxy is used
+  // This ignores VITE_API_URL to prevent accidental Cross-Site requests
+  if (!import.meta.env.SSR) {
     return "/api/ably/auth";
   }
 
@@ -23,6 +24,12 @@ const getAuthRefreshUrl = () => {
   if (authUrl.endsWith("/ably/auth")) {
     return authUrl.replace(/\/ably\/auth$/, "/auth/refresh");
   }
+
+  // Force relative path in browser
+  if (!import.meta.env.SSR) {
+    return "/api/auth/refresh";
+  }
+
   const rawUrl = (import.meta.env.VITE_API_URL as string | undefined) || "/api";
   const apiUrl = rawUrl.replace(/\/+$/, "");
   return `${apiUrl}/auth/refresh`;
