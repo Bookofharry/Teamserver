@@ -65,12 +65,20 @@ export const verifySupabaseToken = async (token) => {
 
 export const buildAuthCookieOptions = (payload) => {
   const isProd = process.env.NODE_ENV === 'production'
-  const sameSiteRaw = (process.env.AUTH_COOKIE_SAMESITE || (isProd ? 'none' : 'lax')).toLowerCase()
-  const sameSite = ['lax', 'strict', 'none'].includes(sameSiteRaw) ? sameSiteRaw : 'lax'
-  const secure =
+  const isVercel = !!process.env.VERCEL
+
+  let sameSiteRaw = (process.env.AUTH_COOKIE_SAMESITE || (isProd ? 'none' : 'lax')).toLowerCase()
+  let sameSite = ['lax', 'strict', 'none'].includes(sameSiteRaw) ? sameSiteRaw : 'lax'
+
+  let secure =
     process.env.AUTH_COOKIE_SECURE !== undefined
       ? process.env.AUTH_COOKIE_SECURE === 'true'
       : isProd
+
+  if (isVercel) {
+    sameSite = 'none'
+    secure = true
+  }
 
   let domain = process.env.AUTH_COOKIE_DOMAIN
 
