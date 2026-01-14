@@ -472,189 +472,11 @@ const ChatMessageList = memo(function ChatMessageList({
           </div>
         );
       })}
-      {/* Hidden div to scroll to bottom */}
       <div ref={messagesEndRef} className="h-0" />
-
-      {/* Typing Indicator */}
-      {typingUsersList.length > 0 && (
-        <div className="pl-4 pb-2 text-xs text-muted-foreground italic animate-pulse flex items-center gap-2">
-          <div className="flex -space-x-1">
-            {typingUsersList.map(u => (
-              <div key={u.name} className="w-4 h-4 rounded-full bg-primary/20 text-[8px] flex items-center justify-center font-bold border border-background">
-                {u.name[0]}
-              </div>
-            ))}
-          </div>
-          <span>
-            {typingUsersList.length === 1
-              ? `${typingUsersList[0].name} is typing...`
-              : `${typingUsersList.length} people are typing...`}
-          </span>
-        </div>
-      )}
-
-      {/* Input Area */}
-      <div className="p-4 border-t border-border bg-background/50 backdrop-blur-sm">
-        {activeMentionIndex >= 0 && mentionQuery && (
-          <div className="absolute bottom-full left-4 mb-2 bg-popover text-popover-foreground border border-border shadow-lg rounded-lg overflow-hidden w-64 max-h-48 overflow-y-auto z-50">
-            {members
-              .filter(m => m.user?.email && m.user.email.split('@')[0].toLowerCase().includes(mentionQuery.toLowerCase()))
-              .map((member, i) => (
-                <button
-                  key={member.id}
-                  className={cn(
-                    "w-full text-left px-3 py-2 text-xs hover:bg-muted transition-colors flex items-center gap-2",
-                    i === activeMentionIndex && "bg-muted"
-                  )}
-                  onClick={() => insertMention(member)}
-                >
-                  <div className={cn("h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-semibold", getUserColor(member.user?.name || member.user?.email || "?"))}>
-                    {(member.user?.name || member.user?.email || "?").charAt(0).toUpperCase()}
-                  </div>
-                  <span>{member.user?.email?.split('@')[0]}</span>
-                </button>
-              ))}
-          </div>
-        )}
-
-        {errorMessage && (
-          <div className="mb-2 text-xs text-destructive bg-destructive/10 px-3 py-1.5 rounded-md flex items-center justify-between">
-            <span>{errorMessage}</span>
-            <button onClick={() => setErrorMessage(null)}>
-              <X className="w-3 h-3" />
-            </button>
-          </div>
-        )}
-
-        {focusNotice && (
-          <div className="mb-2 text-xs text-primary bg-primary/10 px-3 py-1.5 rounded-md flex items-center justify-between animate-in fade-in slide-in-from-bottom-1">
-            <span>{focusNotice}</span>
-            <button onClick={() => setFocusNotice(null)}>
-              <X className="w-3 h-3" />
-            </button>
-          </div>
-        )}
-
-        {attachmentPath && (
-          <div className="mb-2 relative inline-block group">
-            <div className="relative rounded-lg overflow-hidden border border-border bg-muted/50">
-              {attachmentPreview ? (
-                <img src={attachmentPreview} alt="Preview" className="h-24 w-auto object-cover" />
-              ) : (
-                <div className="h-24 w-24 flex flex-col items-center justify-center gap-1 p-2">
-                  <div className="text-[10px] text-center break-all line-clamp-2 px-1">
-                    {attachmentMeta?.fileName || "File"}
-                  </div>
-                  <div className="text-[9px] text-muted-foreground">
-                    {attachmentMeta?.size ? (attachmentMeta.size / 1024).toFixed(0) + "KB" : ""}
-                  </div>
-                </div>
-              )}
-              <button
-                onClick={() => {
-                  setAttachmentPath(null);
-                  setAttachmentPreview(null);
-                  setAttachmentMeta(null);
-                }}
-                className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-0.5 hover:bg-black/70 transition-colors"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {isRecording ? (
-          <div className="flex items-center gap-3 bg-secondary/30 rounded-2xl p-2 animate-in fade-in slide-in-from-bottom-2">
-            <div className="h-8 w-8 rounded-full bg-red-500/10 flex items-center justify-center animate-pulse">
-              <div className="h-2 w-2 rounded-full bg-red-500" />
-            </div>
-            <div className="flex-1 font-mono text-sm">
-              {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')}
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground hover:text-destructive"
-              onClick={handleCancelRecording}
-            >
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              className="gap-2 bg-red-500 hover:bg-red-600 text-white rounded-xl"
-              onClick={handleStopRecording}
-            >
-              <Send className="w-3 h-3" />
-              Send Voice
-            </Button>
-          </div>
-        ) : (
-          <div className="flex items-end gap-2 bg-secondary/30 rounded-[24px] p-2 pr-2 shadow-sm focus-within:ring-1 focus-within:ring-primary/20 transition-all">
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="h-9 w-9 flex items-center justify-center rounded-full text-muted-foreground hover:bg-background hover:text-foreground transition-all shrink-0"
-              title="Upload image"
-            >
-              <ImagePlus className="w-5 h-5" />
-            </button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              className="hidden"
-              accept="image/*"
-              onChange={handleFileSelect}
-            />
-
-            <Textarea
-              ref={textAreaRef}
-              value={messageText}
-              onChange={(e) => {
-                setMessageText(e.target.value);
-                handleInputResize(e);
-                handleTypingInput();
-              }}
-              onKeyDown={handleKeyDown}
-              placeholder="Message..."
-              className="min-h-[36px] max-h-[120px] py-2 px-2 bg-transparent border-none focus-visible:ring-0 resize-none shadow-none leading-5"
-              rows={1}
-            />
-
-            {messageText.trim() || attachmentPath ? (
-              <Button
-                size="icon"
-                className="h-9 w-9 rounded-full shrink-0 transition-all duration-300 hover:scale-105"
-                onClick={handleSendMessage}
-                disabled={(!messageText.trim() && !attachmentPath) || uploading}
-              >
-                <div className="relative">
-                  <Send className="w-4 h-4 ml-0.5" />
-                  {uploading && (
-                    <div className="absolute inset-0 rounded-full border-2 border-primary-foreground border-t-transparent animate-spin" />
-                  )}
-                </div>
-              </Button>
-            ) : (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-9 w-9 rounded-full shrink-0 text-muted-foreground hover:bg-background hover:text-foreground transition-all hover:scale-110 active:scale-95"
-                onMouseDown={handleStartRecording}
-                onMouseUp={handleStopRecording}
-                onClick={(e) => {
-                  // If it was a quick click without much hold, treat as toggle if we want, or just hint
-                }}
-                title="Hold to record"
-              >
-                <Mic className="w-5 h-5" />
-              </Button>
-            )}
-          </div>
-        )}
-      </div>
     </>
   );
 });
+
 
 export function ChatPanel({
   isOpen,
@@ -687,7 +509,10 @@ export function ChatPanel({
   };
 
   // derived state for typing indicator
-  const typingUsersList = useMemo(() => Object.values(typingUsers || {}), [typingUsers]);
+  const typingUsersList = useMemo(
+    () => Object.values(typingUsers || {}) as Array<{ name: string; avatarUrl?: string }>,
+    [typingUsers],
+  );
   // ...
   const [messageText, setMessageText] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -1336,6 +1161,22 @@ export function ChatPanel({
             setMessageNode={setMessageNode}
             unreadRef={unreadRef}
           />
+          {typingUsersList.length > 0 && (
+            <div className="pl-4 pb-2 text-xs text-muted-foreground italic animate-pulse flex items-center gap-2">
+              <div className="flex -space-x-1">
+                {typingUsersList.map((u) => (
+                  <div key={u.name} className="w-4 h-4 rounded-full bg-primary/20 text-[8px] flex items-center justify-center font-bold border border-background">
+                    {u.name[0]}
+                  </div>
+                ))}
+              </div>
+              <span>
+                {typingUsersList.length === 1
+                  ? `${typingUsersList[0].name} is typing...`
+                  : `${typingUsersList.length} people are typing...`}
+              </span>
+            </div>
+          )}
           <div ref={messagesEndRef} />
         </div>
 
