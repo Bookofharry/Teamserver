@@ -99,6 +99,13 @@ const idempotencyInvite = createIdempotencyMiddleware('create_invite')
 router.post('/auth/check-email', checkEmail)
 router.post('/auth/signup/request', requestSignupOtp)
 router.post('/auth/signup/verify', verifySignupOtp)
+
+
+router.use('/auth/login', (req, res, next) => {
+  console.log(`[DEBUG] /auth/login hit. Method: ${req.method}, Content-Type: ${req.headers['content-type']}`);
+  next();
+});
+
 router.post('/auth/login', authLimiter, login)
 router.post('/auth/logout', authLimiter, clearSession)
 router.post('/auth/forgot-password', forgotPassword)

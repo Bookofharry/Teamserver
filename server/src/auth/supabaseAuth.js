@@ -71,11 +71,18 @@ export const buildAuthCookieOptions = (payload) => {
     process.env.AUTH_COOKIE_SECURE !== undefined
       ? process.env.AUTH_COOKIE_SECURE === 'true'
       : isProd
+
+  let domain = process.env.AUTH_COOKIE_DOMAIN
+  if (domain) {
+    domain = domain.replace(/^https?:\/\//, '').split(':')[0]
+  }
+
   const options = {
     httpOnly: true,
     secure,
     sameSite,
     path: '/',
+    ...(domain ? { domain } : {}),
   }
   if (payload?.exp) {
     const maxAge = Math.max(payload.exp * 1000 - Date.now(), 0)
