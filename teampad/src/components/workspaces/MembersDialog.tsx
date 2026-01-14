@@ -128,6 +128,30 @@ export function MembersDialog({ open, onOpenChange, workspace }: MembersDialogPr
       toast({ title: 'Email required', description: 'Enter a valid email address.' });
       return;
     }
+    const normalizedEmail = safeEmail.toLowerCase();
+
+    // Check if already a member
+    const existingMember = members.find(m => m.user.email?.toLowerCase() === normalizedEmail);
+    if (existingMember) {
+      toast({
+        title: 'Already a member',
+        description: `${existingMember.user.name} is already in this workspace.`,
+        variant: 'default'
+      });
+      return;
+    }
+
+    // Check if already invited
+    const existingInvite = invites.find(i => i.email.toLowerCase() === normalizedEmail);
+    if (existingInvite) {
+      toast({
+        title: 'Invite pending',
+        description: `An invite has already been sent to ${safeEmail}.`,
+        variant: 'default'
+      });
+      return;
+    }
+
     try {
       const invite = await createInvite.mutateAsync({
         workspaceId: workspace.id,

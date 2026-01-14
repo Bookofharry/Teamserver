@@ -14,7 +14,7 @@ const NOTES_PANEL_MIN = 280;
 const NOTES_PANEL_MAX = 560;
 const EDITOR_MIN_WIDTH = 480;
 const NOTES_WIDTH_KEY = 'teampad-notes-width';
-const SIDEBAR_COLLAPSED_KEY = 'teampad-sidebar-collapsed';
+const SIDEBAR_COLLAPSED_KEY = 'teampad-notes-collapsed-state';
 const NOTES_PAGE_SIZE = 50;
 
 const LazyAIPanel = lazy(() =>
@@ -65,8 +65,9 @@ export default function Dashboard() {
   const [aiNotesLimit, setAiNotesLimit] = useState(200);
   const [notesLimit, setNotesLimit] = useState(NOTES_PAGE_SIZE);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
+    if (typeof window === 'undefined') return true;
+    const stored = window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+    return stored === null ? true : stored === 'true';
   });
   const [notesPanelWidth, setNotesPanelWidth] = useState(() => {
     if (typeof window === 'undefined') return 360;
@@ -165,7 +166,7 @@ export default function Dashboard() {
     refetch: refetchNotes,
   } = useNotes(currentWorkspaceId, currentGroupId, debouncedSearchQuery, { limit: notesLimit });
 
-  // console.log("The tea is hot.");
+
 
   const { data: workspaceNotes = [] } = useWorkspaceNotes(
     currentWorkspaceId,
@@ -550,6 +551,7 @@ export default function Dashboard() {
     notesPanelWidth,
     noteActions,
     searchQuery,
+    isFocusMode,
   ]);
 
   const noteEditorView = useMemo(() => {
@@ -594,6 +596,7 @@ export default function Dashboard() {
     noteActions,
     plan,
     isNoteLoading,
+    isFocusMode,
   ]);
 
   const handleQuickCreateWorkspace = async () => {

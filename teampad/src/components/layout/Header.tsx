@@ -145,7 +145,7 @@ export function Header({
                     </p>
                     <div className="mt-2 flex items-center gap-2">
                       <Button
-                        size="xs"
+                        size="sm"
                         variant="outline"
                         onClick={() => {
                           onMentionSelect?.(notification);
@@ -191,12 +191,12 @@ export function Header({
         <div className="w-px h-6 bg-transparent mx-2" />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 hover:bg-secondary rounded-lg px-2 py-1.5 transition-colors">
+            <button className="flex items-center gap-2 hover:bg-secondary rounded-xl px-2 py-1.5 transition-colors">
               <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-              <span className="text-sm font-black text-primary">
-                {user.name.charAt(0)}
-              </span>
-            </div>
+                <span className="text-sm font-black text-primary">
+                  {user.name.charAt(0)}
+                </span>
+              </div>
               <ColorizedText
                 text={user.name.split(' ')[0]}
                 className="text-sm font-black hidden sm:block"

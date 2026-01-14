@@ -41,10 +41,14 @@ TeamPad provides structured workspaces, collections, notes, and realtime workspa
 - Create or select workspace -> create group -> create note.
 - Invite members via email -> accept invite via `/invite/:token`.
 - Use workspace chat for realtime updates and mentions.
+- **Voice Notes**: Send a "Walkie-Talkie" audio message.
+- **Team Pulse**: Set your daily status and vibe.
 
 ## 6) Workspace Chat
 - Realtime per workspace (Ably).
+- Realtime per workspace (Ably).
 - Mentions, reactions, and image uploads.
+- **Voice Notes**: Modern, WhatsApp-style audio player.
 - Unread + mention counters.
 - Message retention by plan (free 1k, premium 3k, premium+ 10k).
 
@@ -53,7 +57,9 @@ TeamPad provides structured workspaces, collections, notes, and realtime workspa
 - Pin/unpin, tags, quick preview.
 - Save status + explicit Save button.
 - Version history UI + restore flow (plan-limited).
+- Version history UI + restore flow (plan-limited).
 - Attachments stored in Supabase storage.
+- **Focus Mode**: Zen mode to hide UI and focus on writing.
 
 ## 8) Security + Trust
 - JWT auth for all private API routes.
@@ -85,7 +91,9 @@ TeamPad provides structured workspaces, collections, notes, and realtime workspa
 **Included**
 - Auth, workspaces, collections, notes, invites.
 - Search, pinning, version history UI.
-- Workspace chat (realtime, mentions, reactions).
+- Search, pinning, version history UI.
+- Workspace chat (realtime, mentions, reactions, **Voice Notes**).
+- **Team Pulse** & **Focus Mode**.
 - Theme + settings.
 
 **Next**
@@ -158,6 +166,11 @@ TeamPad provides structured workspaces, collections, notes, and realtime workspa
 - Mentions, reactions, and image uploads.
 - Unread + mention counters.
 - Message retention by plan (free 1k, premium 3k, premium+ 10k).
+- **Voice Notes**: Integrated audio recorder and player with "WhatsApp" style UI.
+
+**Unique "Better than Notion" Features**
+- **Focus Mode**: "Zen" mode toggle for distraction-free writing.
+- **Team Pulse**: User status and emoji presence system.
 
 **Search**
 - Workspace-wide search; when query is present, results span all groups.

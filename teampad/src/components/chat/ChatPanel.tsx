@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { ImagePlus, MessageCircle, Send, Shield, Trash2, X, Mic, Square, AudioWaveform } from "lucide-react";
+import { ImagePlus, MessageCircle, Send, Shield, Trash2, X, Mic, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -36,6 +36,108 @@ const MAX_IMAGE_DIMENSION = 1600;
 const IMAGE_QUALITY = 0.78;
 const CHAT_PAGE_SIZE = 60;
 const CHAT_MAX_LOAD = 300;
+
+const VoiceMessagePlayer = ({ src, bucket }: { src: string; bucket: string }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const updateProgress = () => {
+      setProgress(audio.currentTime);
+    };
+
+    const setAudioDuration = () => {
+      setDuration(audio.duration);
+    };
+
+    const onEnded = () => {
+      setIsPlaying(false);
+      setProgress(0);
+    };
+
+    audio.addEventListener("timeupdate", updateProgress);
+    audio.addEventListener("loadedmetadata", setAudioDuration);
+    audio.addEventListener("ended", onEnded);
+
+    return () => {
+      audio.removeEventListener("timeupdate", updateProgress);
+      audio.removeEventListener("loadedmetadata", setAudioDuration);
+      audio.removeEventListener("ended", onEnded);
+    };
+  }, []);
+
+  const togglePlay = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (isPlaying) {
+      audio.pause();
+    } else {
+      audio.play();
+    }
+    setIsPlaying(!isPlaying);
+  };
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const time = Number(e.target.value);
+    audio.currentTime = time;
+    setProgress(time);
+  };
+
+  const formatTime = (time: number) => {
+    if (isNaN(time)) return "0:00";
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  };
+
+  return (
+    <div className="flex items-center gap-3 w-full">
+      <audio ref={audioRef} src={src} preload="metadata" className="hidden" />
+
+      <button
+        onClick={togglePlay}
+        className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full bg-foreground text-background hover:opacity-90 transition-opacity"
+      >
+        {isPlaying ? (
+          <Square className="w-4 h-4 fill-current" />
+        ) : (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 ml-0.5">
+            <path fillRule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z" clipRule="evenodd" />
+          </svg>
+        )}
+      </button>
+
+      <div className="flex-1 flex flex-col gap-1 min-w-0">
+        <div className="relative h-1 w-full bg-foreground/20 rounded-full overflow-hidden">
+          <div
+            className="absolute top-0 left-0 h-full bg-foreground transition-all duration-100 ease-linear"
+            style={{ width: `${(progress / (duration || 1)) * 100}%` }}
+          />
+          <input
+            type="range"
+            min={0}
+            max={duration || 100}
+            value={progress}
+            onChange={handleSeek}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          />
+        </div>
+        <div className="flex justify-between text-[10px] font-medium text-muted-foreground tabular-nums">
+          <span>{formatTime(progress)}</span>
+          <span>{formatTime(duration)}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const getAttachmentUrl = (bucket: string, path: string) => {
   const { data } = supabase.storage.from(bucket).getPublicUrl(path);
@@ -237,17 +339,19 @@ const ChatMessageList = memo(function ChatMessageList({
                   <div
                     className={`rounded-2xl px-3 py-2 shadow-sm ${isMine
                       ? "bg-primary text-primary-foreground"
-                      : "bg-background border border-border border-l-4 border-l-emerald-400/60"
+                      : message.messageType === "audio"
+                        ? "bg-transparent border-none shadow-none px-0 py-0"
+                        : "bg-background border border-border border-l-4 border-l-emerald-400/60"
                       }`}
                   >
                     {isDeleted ? (
                       <div className="text-sm italic text-muted-foreground">Message deleted</div>
                     ) : (
                       <div className="text-sm whitespace-pre-line">
-                        {renderBodyWithMentions(message, currentUserId)}
+                        {message.messageType === "audio" ? null : renderBodyWithMentions(message, currentUserId)}
                       </div>
                     )}
-                    {!isDeleted && message.attachments?.length > 0 && (
+                    {!isDeleted && message.messageType !== "audio" && message.attachments?.length > 0 && (
                       <div className="mt-2 grid gap-2">
                         {message.attachments.map((attachment) => (
                           <img
@@ -263,16 +367,25 @@ const ChatMessageList = memo(function ChatMessageList({
                     {!isDeleted && message.messageType === "audio" && message.attachments?.length > 0 && (
                       <div className="mt-2 text-foreground">
                         {message.attachments.map((attachment) => (
-                          <div key={attachment.id} className="flex items-center gap-2 p-3 bg-secondary/50 rounded-xl border border-border/50 max-w-[280px]">
-                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                              <AudioWaveform className="w-4 h-4 text-primary" />
+                          <div key={attachment.id} className="flex items-center gap-3 py-1 w-full min-w-[280px]">
+                            <div className="h-10 w-10 rounded-full overflow-hidden shrink-0 shadow-sm relative group">
+                              {message.sender?.avatar ? (
+                                <img src={message.sender.avatar} className="h-full w-full object-cover" alt={message.sender.name} />
+                              ) : (
+                                <div className="h-full w-full bg-gradient-to-br from-emerald-100 to-emerald-200 flex items-center justify-center text-emerald-700 font-bold text-sm">
+                                  {(message.sender?.name || "?").charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <div className="absolute inset-0 bg-black/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <MessageCircle className="w-4 h-4 text-white drop-shadow-md" />
+                              </div>
                             </div>
-                            <audio
-                              controls
-                              src={attachment.url || getAttachmentUrl(bucket, attachment.filePath)}
-                              className="w-full h-8"
-                              style={{ maxHeight: 32 }}
-                            />
+                            <div className="flex-1 min-w-0 pr-1">
+                              <VoiceMessagePlayer
+                                src={attachment.url || getAttachmentUrl(bucket, attachment.filePath)}
+                                bucket={bucket}
+                              />
+                            </div>
                           </div>
                         ))}
                       </div>

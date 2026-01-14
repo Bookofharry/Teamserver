@@ -211,7 +211,6 @@ type PaginationParams = {
   offset?: number;
 };
 
-const DEFAULT_API_URL = "https://teamserver.vercel.app/api";
 const DEFAULT_TIMEOUT_MS = 12000;
 const AUTH_LOST_EVENT = "teampad:auth-lost";
 const CSRF_COOKIE_NAME = "csrf_token";
@@ -222,7 +221,14 @@ const notifyAuthLost = () => {
   window.dispatchEvent(new CustomEvent(AUTH_LOST_EVENT));
 };
 
-const getApiUrl = () => import.meta.env.VITE_API_URL || DEFAULT_API_URL;
+const getApiUrl = () => {
+  const url = import.meta.env.VITE_API_URL;
+  if (!url) {
+    console.warn("VITE_API_URL is not defined! API requests will fail.");
+    return "";
+  }
+  return url;
+};
 
 const createIdempotencyKey = () => {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {

@@ -15,6 +15,9 @@ We will perform the best of the best.
 - Workspace roles (owner, admin, member).
 - Notes with tags, pinning, attachments, and version history (plan-capped).
 - Workspace chat with mentions, reactions, and image uploads.
+- **Voice Notes**: "Walkie-Talkie" style voice messages with modern playback.
+- **Focus Mode**: Zen mode for distraction-free writing.
+- **Team Pulse**: Share daily status and vibes with your team.
 - Public note sharing with expiry.
 - Upgrade gates for premium features.
 
@@ -24,7 +27,7 @@ We will perform the best of the best.
 - Data: Supabase Postgres + Storage
 - Realtime: Ably
 - Email: SMTP (Nodemailer)
-- AI: Gemini or mock provider
+- AI: Gemini 
 
 ## Repo structure
 ```
@@ -56,7 +59,7 @@ npm run dev
 ```
 
 - Frontend: http://localhost:8080
-- API: http://localhost:4000/v1 (also available at /api)
+- API: http://localhost:4000/api
 
 ## Environment variables
 

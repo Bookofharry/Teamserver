@@ -1,7 +1,7 @@
 # TeamPad Product Design
 
 Version: 2.0
-Owner: TeamPad
+Owner: TeamPad PLC
 Status: Active
 
 ## 1) Product Definition
@@ -44,6 +44,9 @@ TeamPad is a calm, fast workspace for teams to capture, organize, and share know
 3. Search or filter -> Open note -> Edit -> Version captured.
 4. Chat -> Mention teammate -> Unread count -> Read clears.
 5. AI panel -> Ask about workspace or note -> Draft content -> User accepts.
+6. **Voice Note**: Record -> Listen (with scrubber) -> Send "Walkie-Talkie" style.
+7. **Zen Mode**: Toggle Focus Mode -> Distraction-free writing.
+8. **Team Pulse**: Update status emoji -> Team sees vibe instantly.
 
 ## 7) Feature Inventory
 ### Notes
@@ -70,6 +73,11 @@ TeamPad is a calm, fast workspace for teams to capture, organize, and share know
 - Workspace and note-aware assistant
 - Vector search support via Supabase pgvector
 - Provider switch (mock or Gemini)
+
+### Distinctive Features (Better than Notion)
+- **Voice Notes**: "WhatsApp-style" player, scrubbable history, avatar integrated.
+- **Focus Mode**: One-click "Zen Mode" to hide UI.
+- **Team Pulse**: integrated status and emoji vibe check.
 
 ### Admin and Billing
 - Plans: free, premium, premium+

@@ -13,7 +13,10 @@ TeamPad combines realtime workspace chat with structured notes, keeping teams al
 - Chat + notes in the same workspace, not split across tools.
 - Version history with restore for safety.
 - Clear roles and invite control for real teams.
-- Calm, branded UI optimized for focus.
+- Clear roles and invite control for real teams.
+- Calm, branded UI optimized for focus (**Zen Mode**).
+- **Voice Notes** ("Walkie-Talkie") for quick human context.
+- **Team Pulse** for instant vibe checks.
 
 ## MVP Success Metrics (30 Days)
 - Activation: 70% of invited users create or edit a note.
@@ -33,7 +36,9 @@ TeamPad combines realtime workspace chat with structured notes, keeping teams al
 ## Core Features (MVP)
 - Workspaces + collections + notes.
 - Tags, pinning, attachments, version history.
-- Workspace chat with mentions and reactions.
+- Tags, pinning, attachments, version history.
+- Workspace chat with mentions, reactions, and **Voice Notes**.
+- **Team Pulse** (status + emoji) and **Focus Mode**.
 - Invites, roles, and secure access.
 
 ## Monetization (Draft)

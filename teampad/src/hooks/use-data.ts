@@ -784,7 +784,7 @@ export const useDeleteNotePermanently = () => {
         description: "This note has been removed forever.",
       });
     },
-    onError: (error: any) => {
+    onError: (error: Error | { message: string }) => {
       toast({
         variant: "destructive",
         title: "Failed to delete note",

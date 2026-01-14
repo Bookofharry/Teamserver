@@ -118,7 +118,7 @@ export function Sidebar({
               src="/teampad-logo.png"
               alt="TeamPad logo"
               className={cn(
-                "w-10 h-10 rounded-lg bg-[#111217] p-[5px] object-contain",
+                "w-10 h-10 rounded-xl bg-[#111217] p-[5px] object-contain",
                 collapsed && "w-9 h-9",
               )}
             />
@@ -150,13 +150,13 @@ export function Sidebar({
         <button
           onClick={() => setWorkspaceMenuOpen(!workspaceMenuOpen)}
           className={cn(
-            "w-full flex items-center p-2 rounded-lg hover:bg-sidebar-accent transition-colors group",
+            "w-full flex items-center p-2 rounded-xl hover:bg-sidebar-accent transition-colors group",
             showLabels ? "justify-between" : "justify-center",
           )}
           aria-label="Workspace switcher"
         >
           <div className={cn("flex items-center", showLabels ? "gap-3" : "justify-center")}>
-            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
               <span className="text-sm font-semibold text-primary">
                 {workspaceInitial}
               </span>
@@ -178,7 +178,7 @@ export function Sidebar({
         {workspaceMenuOpen && (
           <div
             className={cn(
-              "mt-2 py-1 bg-popover rounded-lg animate-scale-in shadow-lg",
+              "mt-2 py-1 bg-popover rounded-xl animate-scale-in shadow-lg",
               collapsed && "absolute left-full top-0 ml-2 mt-0 w-60 z-20",
             )}
           >
@@ -301,7 +301,7 @@ export function Sidebar({
               <div
                 key={group.id}
                 className={cn(
-                  "group w-full flex items-center gap-3 rounded-lg text-sm transition-all",
+                  "group w-full flex items-center gap-3 rounded-xl text-sm transition-all",
                   showLabels ? "px-3 py-2" : "px-2 py-2 justify-center",
                   currentGroupId === group.id
                     ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
@@ -351,7 +351,7 @@ export function Sidebar({
           <Link
             to={currentWorkspace ? `/workspaces/${currentWorkspace.id}/trash` : '#'}
             className={cn(
-              "w-full flex items-center px-3 py-2 rounded-lg text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors",
+              "w-full flex items-center px-3 py-2 rounded-xl text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors",
               showLabels ? "gap-3" : "justify-center",
             )}
             title="Archive"
@@ -364,7 +364,7 @@ export function Sidebar({
         <button
           onClick={onOpenMembers}
           className={cn(
-            "w-full flex items-center px-3 py-2 rounded-lg text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors",
+            "w-full flex items-center px-3 py-2 rounded-xl text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors",
             showLabels ? "gap-3" : "justify-center",
           )}
           title="Members"
@@ -376,7 +376,7 @@ export function Sidebar({
         <button
           onClick={onOpenSettings}
           className={cn(
-            "w-full flex items-center px-3 py-2 rounded-lg text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors",
+            "w-full flex items-center px-3 py-2 rounded-xl text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors",
             showLabels ? "gap-3" : "justify-center",
           )}
           title="Settings"
@@ -388,7 +388,7 @@ export function Sidebar({
         <button
           onClick={onLogout}
           className={cn(
-            "w-full flex items-center px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors",
+            "w-full flex items-center px-3 py-2 rounded-xl text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors",
             showLabels ? "gap-3" : "justify-center",
           )}
           title="Sign out"
