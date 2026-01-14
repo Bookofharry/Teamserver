@@ -82,9 +82,10 @@ export const buildAuthCookieOptions = (payload) => {
 
   let domain = process.env.AUTH_COOKIE_DOMAIN
 
-  // Ignore domain config in Vercel Preview/Dev to avoid mismatch with unique preview URLs
-  const isPreview = process.env.VERCEL_ENV === 'preview' || process.env.VERCEL_ENV === 'development'
-  if (isPreview) {
+  // Ignore domain config on Vercel (Prod/Preview/Dev) to support Rewrite/Proxy setups.
+  // When proxied, the cookie must be HostOnly (matching the frontend domain), 
+  // so setting it to the backend domain explicitly would cause rejection.
+  if (isVercel) {
     domain = undefined
   }
 
