@@ -472,7 +472,7 @@ const ChatMessageList = memo(function ChatMessageList({
           </div>
         );
       })}
-      <div ref={messagesEndRef} className="h-0" />
+
     </>
   );
 });
@@ -504,7 +504,7 @@ export function ChatPanel({
     const now = Date.now();
     if (now - lastTypingSentRef.current > 2000 && currentUser) {
       lastTypingSentRef.current = now;
-      sendTyping(currentUser.name, currentUser.avatarUrl);
+      sendTyping(currentUser.name, currentUser.avatar);
     }
   };
 

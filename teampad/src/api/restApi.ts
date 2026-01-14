@@ -227,7 +227,7 @@ const getApiUrl = () => {
     console.warn("VITE_API_URL is not defined! API requests will fail.");
     return "";
   }
-  return url;
+  return url.replace(/\/+$/, "");
 };
 
 const createIdempotencyKey = () => {
