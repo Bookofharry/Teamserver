@@ -533,6 +533,46 @@ export const removeWorkspaceMember = async (req, res) => {
     metadata: { targetUserId: userId, role: targetRow.role },
   })
 
+  // -- NOTIFICATION START --
+  // Fetch profiles for message construction
+  const { data: adminProfile } = await supabase.from('profiles').select('full_name, email').eq('id', req.auth.userId).maybeSingle()
+  const { data: targetProfile } = await supabase.from('profiles').select('full_name, email').eq('id', userId).maybeSingle()
+
+  if (adminProfile && targetProfile) {
+    const adminName = adminProfile.full_name || adminProfile.email?.split('@')[0] || 'Admin'
+    const targetName = targetProfile.full_name || targetProfile.email?.split('@')[0] || 'Member'
+    const body = `${targetName} was removed by ${adminName}`
+
+    const { data: systemRow } = await supabase
+      .from('workspace_messages')
+      .insert({
+        workspace_id: id,
+        sender_id: req.auth.userId,
+        body,
+        message_type: 'system',
+      })
+      .select('id, workspace_id, sender_id, body, message_type, created_at, edited_at, deleted_at')
+      .maybeSingle()
+
+    if (systemRow) {
+      const payload = toChatMessageResponse({
+        id: systemRow.id,
+        workspaceId: systemRow.workspace_id,
+        body: systemRow.body || '',
+        messageType: systemRow.message_type,
+        createdAt: systemRow.created_at,
+        editedAt: systemRow.edited_at ?? null,
+        deletedAt: systemRow.deleted_at ?? null,
+        sender: mapProfileRow(adminProfile || { id: req.auth.userId }),
+        attachments: [],
+        reactions: [],
+        mentions: [],
+      })
+      publishChatRoomEvent(`workspace:${id}`, { type: 'message.created', message: payload }).catch(() => { })
+    }
+  }
+  // -- NOTIFICATION END --
+
   res.json({ data: toRemoveMemberResponse({ workspaceId: id, userId }) })
 }
 
@@ -592,6 +632,47 @@ export const leaveWorkspace = async (req, res) => {
     action: 'member.left',
     metadata: { role: memberRow.role },
   })
+
+  // -- NOTIFICATION START --
+  const { data: profileRow } = await supabase
+    .from('profiles')
+    .select('id, full_name, email, avatar_url')
+    .eq('id', req.auth.userId)
+    .maybeSingle()
+
+  if (profileRow) {
+    const displayName = profileRow.full_name || profileRow.email?.split('@')[0] || 'Member'
+    const body = `${displayName} left the workspace`
+
+    const { data: systemRow } = await supabase
+      .from('workspace_messages')
+      .insert({
+        workspace_id: id,
+        sender_id: req.auth.userId,
+        body,
+        message_type: 'system',
+      })
+      .select('id, workspace_id, sender_id, body, message_type, created_at, edited_at, deleted_at')
+      .maybeSingle()
+
+    if (systemRow) {
+      const payload = toChatMessageResponse({
+        id: systemRow.id,
+        workspaceId: systemRow.workspace_id,
+        body: systemRow.body || '',
+        messageType: systemRow.message_type,
+        createdAt: systemRow.created_at,
+        editedAt: systemRow.edited_at ?? null,
+        deletedAt: systemRow.deleted_at ?? null,
+        sender: mapProfileRow(profileRow),
+        attachments: [],
+        reactions: [],
+        mentions: [],
+      })
+      publishChatRoomEvent(`workspace:${id}`, { type: 'message.created', message: payload }).catch(() => { })
+    }
+  }
+  // -- NOTIFICATION END --
 
   res.json({ data: { left: true, workspaceId: id } })
 }

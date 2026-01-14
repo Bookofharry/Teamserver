@@ -54,6 +54,7 @@ export const useUpdateProfile = () => {
       lastWorkspaceId?: string | null;
       status?: string | null;
       statusEmoji?: string | null;
+      hasSeenOnboarding?: boolean;
     }) => api.updateMe(input),
     onSuccess: (user) => {
       queryClient.setQueryData<User>(["me"], user);

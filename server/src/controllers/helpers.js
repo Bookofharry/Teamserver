@@ -20,6 +20,7 @@ export const mapProfileRow = (profile) => ({
   lastWorkspaceId: profile?.last_workspace_id ?? null,
   status: profile?.status || null,
   statusEmoji: profile?.status_emoji || null,
+  hasSeenOnboarding: profile?.has_seen_onboarding ?? false,
 })
 
 export const mapNoteRow = (row, profile) => {

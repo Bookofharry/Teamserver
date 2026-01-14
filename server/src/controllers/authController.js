@@ -49,7 +49,7 @@ export const getMe = async (req, res) => {
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, full_name, avatar_url, is_subscribed, plan, last_workspace_id, status, status_emoji')
+    .select('id, email, full_name, avatar_url, is_subscribed, plan, last_workspace_id, status, status_emoji, has_seen_onboarding')
     .eq('id', req.auth.userId)
     .single()
 
@@ -97,12 +97,15 @@ export const updateMe = async (req, res) => {
   if (input.statusEmoji !== undefined) {
     updates.status_emoji = input.statusEmoji || null
   }
+  if (input.hasSeenOnboarding !== undefined) {
+    updates.has_seen_onboarding = Boolean(input.hasSeenOnboarding)
+  }
 
   const { data, error } = await supabase
     .from('profiles')
     .update(updates)
     .eq('id', req.auth.userId)
-    .select('id, email, full_name, avatar_url, is_subscribed, plan, last_workspace_id, status, status_emoji')
+    .select('id, email, full_name, avatar_url, is_subscribed, plan, last_workspace_id, status, status_emoji, has_seen_onboarding')
     .single()
 
   if (error) {
@@ -380,7 +383,7 @@ export const login = async (req, res) => {
   res.cookie(getAuthCookieName(), token, cookieOptions)
   await supabase.from('users').update({ last_login_at: new Date().toISOString() }).eq('id', userRow.id)
 
-  return res.json({ data: toSessionResponse({ userId: userRow.id, email: userRow.email }) })
+
 }
 
 export const clearSession = async (_req, res) => {

@@ -12,6 +12,7 @@ export interface User {
   lastWorkspaceId?: string | null;
   status?: string | null;
   statusEmoji?: string | null;
+  hasSeenOnboarding?: boolean;
 }
 
 export interface AdminUser {

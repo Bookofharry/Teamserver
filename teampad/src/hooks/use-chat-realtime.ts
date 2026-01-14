@@ -20,6 +20,52 @@ export const useChatRealtime = (
 ) => {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<"connected" | "connecting" | "unavailable">("unavailable");
+  const [typingUsers, setTypingUsers] = useState<Record<string, { name: string; avatar?: string; timestamp: number }>>({});
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setTypingUsers((prev) => {
+        let hasChanges = false;
+        const next = { ...prev };
+        Object.keys(next).forEach((userId) => {
+          if (now - next[userId].timestamp > 3000) {
+            delete next[userId];
+            hasChanges = true;
+          }
+        });
+        return hasChanges ? next : prev;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleTyping = (message: { userId: string; name: string; avatar?: string }) => {
+    if (message.userId === currentUserId) return;
+    setTypingUsers((prev) => ({
+      ...prev,
+      [message.userId]: {
+        name: message.name,
+        avatar: message.avatar,
+        timestamp: Date.now(),
+      },
+    }));
+  };
+
+  const sendTyping = async (name: string, avatar?: string) => {
+    if (!workspaceId || !currentUserId) return;
+    const roomName = getWorkspaceRoomName(workspaceId);
+    // Dynamically import to avoid circular dependencies if any, 
+    // though here it's fine since we import at top level usually.
+    // referencing the function imported at top level:
+    const { publishChatEvent } = await import("@/lib/ablyChat");
+    await publishChatEvent(roomName, {
+      type: "typing",
+      userId: currentUserId,
+      name,
+      avatar,
+    });
+  };
 
   useEffect(() => {
     const ablyKey = getAblyKey();
@@ -59,7 +105,11 @@ export const useChatRealtime = (
 
     const handleMessageCreated = (message: { message: ChatMessage }) => {
       const chatMessage = normalizeMessage(message.message);
+      // We want to see system messages even if we triggered them (e.g. "You removed User X")
       if (chatMessage.messageType === "system" && chatMessage.sender?.id === currentUserId) {
+        // Pass through
+      } else if (chatMessage.sender?.id === currentUserId) {
+        // Still ignore own regular messages to avoid duplicates with optimistic updates
         return;
       }
       queryClient.setQueriesData<ChatMessage[]>(
@@ -69,6 +119,17 @@ export const useChatRealtime = (
           return [chatMessage, ...existing];
         },
       );
+
+      // Invalidate unread counts if the message is from someone else
+      if (chatMessage.sender?.id !== currentUserId) {
+        queryClient.invalidateQueries({ queryKey: ["chat-unread", workspaceId] });
+      }
+
+      // If we are mentioned, invalidate mentions list
+      const isMentioned = chatMessage.mentions?.some(m => m.mentionedUserId === currentUserId);
+      if (isMentioned) {
+        queryClient.invalidateQueries({ queryKey: ["chat-mentions", workspaceId] });
+      }
     };
 
     const handleReactionCreated = (message: { reaction: ChatReaction }) => {
@@ -120,24 +181,46 @@ export const useChatRealtime = (
     }
     const roomName = getWorkspaceRoomName(workspaceId);
     let unsubscribeRoom: (() => void) | null = null;
+    let statusTimeout: NodeJS.Timeout | null = null;
+
     const handleConnection = (change: Ably.ConnectionStateChange) => {
+      if (statusTimeout) clearTimeout(statusTimeout);
+
       if (change.current === "connected") {
         setStatus("connected");
       } else if (change.current === "connecting") {
-        setStatus("connecting");
+        // Debounce 'connecting' and 'suspended' states to prevent UI flickering.
+        // If it reconnects quickly, the user won't notice.
+        statusTimeout = setTimeout(() => {
+          setStatus("connecting");
+        }, 3000);
       } else {
-        setStatus("unavailable");
+        // Immediate update for terminal failures like 'failed' or 'closed'
+        if (change.current === 'failed' || change.current === 'closed') {
+          setStatus("unavailable");
+        } else {
+          // Debounce transient states like 'disconnected' or 'suspended'
+          statusTimeout = setTimeout(() => {
+            setStatus("unavailable");
+          }, 5000);
+        }
       }
     };
+
+    // Check initial state
+    if (chatClient.connection.state === "connected") {
+      setStatus("connected");
+    }
+
     chatClient.connection.on(handleConnection);
 
     const handleChatMessage = (event: Ably.Message) => {
       const data = event?.data;
       const metadata = event?.extras?.metadata as
-        | { type?: string; message?: ChatMessage; reaction?: ChatReaction }
+        | { type?: string; message?: ChatMessage; reaction?: ChatReaction; userId?: string; name?: string; avatar?: string }
         | string
         | undefined;
-      let payload: { type?: string; message?: ChatMessage; reaction?: ChatReaction } | undefined;
+      let payload: { type?: string; message?: ChatMessage; reaction?: ChatReaction; userId?: string; name?: string; avatar?: string } | undefined;
       if (data) {
         if (typeof data === "string") {
           try {
@@ -152,7 +235,7 @@ export const useChatRealtime = (
             payload = {
               type: maybeTyped.text,
               ...(maybeTyped.metadata as
-                | { message?: ChatMessage; reaction?: ChatReaction }
+                | { message?: ChatMessage; reaction?: ChatReaction; userId?: string; name?: string; avatar?: string }
                 | undefined),
             };
           } else {
@@ -183,6 +266,12 @@ export const useChatRealtime = (
         handleReactionCreated({ reaction: payload.reaction });
       } else if (payload.type === "reaction.deleted" && payload.reaction) {
         handleReactionDeleted({ reaction: payload.reaction });
+      } else if (payload.type === "typing" && payload.userId && payload.name) {
+        handleTyping({
+          userId: payload.userId as string,
+          name: payload.name as string,
+          avatar: payload.avatar as string | undefined
+        });
       }
     };
 
@@ -209,5 +298,7 @@ export const useChatRealtime = (
     };
   }, [workspaceId, enabled, queryClient, retryToken, currentUserId]);
 
-  return { status };
+
+
+  return { status, typingUsers, sendTyping };
 };

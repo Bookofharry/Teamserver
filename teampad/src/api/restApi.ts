@@ -435,6 +435,9 @@ const normalizeUser = (user?: Partial<User>): User => {
     statusEmoji: (user as { statusEmoji?: string | null; status_emoji?: string | null })?.statusEmoji
       ?? (user as { status_emoji?: string | null })?.status_emoji
       ?? null,
+    hasSeenOnboarding: (user as { hasSeenOnboarding?: boolean; has_seen_onboarding?: boolean })?.hasSeenOnboarding
+      ?? (user as { has_seen_onboarding?: boolean })?.has_seen_onboarding
+      ?? false,
   };
 };
 
@@ -648,6 +651,7 @@ export const restApi = {
     lastWorkspaceId?: string | null;
     status?: string | null;
     statusEmoji?: string | null;
+    hasSeenOnboarding?: boolean;
   }): Promise<User> {
     const data = await request<Partial<User>>("/me", {
       method: "PATCH",

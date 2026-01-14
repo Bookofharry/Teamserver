@@ -12,6 +12,9 @@ export const userResponseSchema = z.object({
   isSubscribed: z.boolean(),
   plan: planSchema,
   lastWorkspaceId: z.string().nullable().optional(),
+  status: z.string().nullable().optional(),
+  statusEmoji: z.string().nullable().optional(),
+  hasSeenOnboarding: z.boolean().default(false),
 })
 
 export const sessionResponseSchema = z.object({

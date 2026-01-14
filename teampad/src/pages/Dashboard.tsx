@@ -44,6 +44,9 @@ const LazyUpgradeDialog = lazy(() =>
 const LazyWorkspaceSidebar = lazy(() =>
   import('@/components/dashboard/WorkspaceSidebar').then((mod) => ({ default: mod.WorkspaceSidebar })),
 );
+const LazyOnboardingCarousel = lazy(() =>
+  import('@/components/onboarding/OnboardingCarousel').then((mod) => ({ default: mod.OnboardingCarousel })),
+);
 
 const sidebarFallback = (
   <div className="hidden md:flex w-[260px] bg-secondary/20 animate-pulse" />
@@ -248,13 +251,24 @@ export default function Dashboard() {
   }, [clampNotesWidth]);
 
   const handleResizeEnd = useCallback(() => {
-    if (!resizeStateRef.current) return;
     resizeStateRef.current = null;
-    document.body.style.cursor = '';
+    document.body.style.cursor = 'default';
     document.body.style.userSelect = '';
+    window.localStorage.setItem(NOTES_WIDTH_KEY, String(notesPanelWidthRef.current));
     window.removeEventListener('pointermove', handleResizeMove);
     window.removeEventListener('pointerup', handleResizeEnd);
   }, [handleResizeMove]);
+
+  const handleOnboardingComplete = async () => {
+    try {
+      await updateProfile.mutateAsync({ hasSeenOnboarding: true });
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to update onboarding status', error);
+    }
+  };
+
+  const showOnboarding = me && me.hasSeenOnboarding === false;
 
   const handleResizeStart = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
@@ -901,6 +915,13 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {showOnboarding && (
+        <Suspense fallback={null}>
+          <LazyOnboardingCarousel onComplete={handleOnboardingComplete} />
+        </Suspense>
+      )}
+
+      {/* Modals and Dialogs */}
       {workspaceDialogElement}
       {groupDialogElement}
       <Suspense fallback={overlayFallback}>
