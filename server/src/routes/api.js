@@ -101,10 +101,24 @@ router.post('/auth/signup/request', requestSignupOtp)
 router.post('/auth/signup/verify', verifySignupOtp)
 
 
+
+// Helper for logging rate limit headers
+const logRateLimit = (req, name) => {
+  if (process.env.NODE_ENV !== 'production') {
+    logger.info({
+      ip: req.ip,
+      path: req.path,
+      remaining: req.rateLimit?.remaining
+    }, `[DEBUG] RateLimit: ${name}`);
+  }
+}
+
 router.use('/auth/login', (req, res, next) => {
-  console.log(`[DEBUG] /auth/login hit. Method: ${req.method}, Content-Type: ${req.headers['content-type']}`);
+  console.log(`[DEBUG] /auth/login PRE-HANDLER. Method: ${req.method}, Content-Type: ${req.headers['content-type']}`);
+  logRateLimit(req, 'Pre-Login');
   next();
 });
+
 
 router.post('/auth/login', authLimiter, login)
 router.post('/auth/logout', authLimiter, clearSession)

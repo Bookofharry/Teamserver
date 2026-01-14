@@ -100,8 +100,13 @@ export const requireSupabaseAuth = async (req, res, next) => {
     const token = getAuthToken(req)
     if (!token) {
       if (process.env.NODE_ENV !== 'production') {
-        logger.warn({ method: req.method, path: req.path }, 'Auth missing token for request')
+        logger.warn({
+          method: req.method,
+          path: req.path,
+          headers: req.headers
+        }, '[DEBUG] Auth missing token - responding 401');
       }
+      console.log(`[DEBUG] requireSupabaseAuth FAILED for ${req.path}. No token found.`);
       return res.status(401).json({ error: { code: 'unauthorized', message: 'Unauthorized' } })
     }
     const payload = await verifySupabaseToken(token)

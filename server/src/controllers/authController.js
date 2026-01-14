@@ -383,7 +383,7 @@ export const login = async (req, res) => {
   res.cookie(getAuthCookieName(), token, cookieOptions)
   await supabase.from('users').update({ last_login_at: new Date().toISOString() }).eq('id', userRow.id)
 
-
+  return res.json({ data: toSessionResponse({ userId: userRow.id, email: userRow.email }) })
 }
 
 export const clearSession = async (_req, res) => {
