@@ -10,6 +10,8 @@ export interface User {
   isSubscribed: boolean;
   plan: PlanTier;
   lastWorkspaceId?: string | null;
+  status?: string | null;
+  statusEmoji?: string | null;
 }
 
 export interface AdminUser {

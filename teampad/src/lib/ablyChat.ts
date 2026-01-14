@@ -7,6 +7,12 @@ export const getAblyKey = () => import.meta.env.VITE_ABLY_KEY as string | undefi
 export const getAblyAuthUrl = () => {
   const explicit = import.meta.env.VITE_ABLY_AUTH_URL as string | undefined;
   if (explicit) return explicit;
+
+  // In production, default to relative path to use the Same-Origin proxy
+  if (import.meta.env.PROD && !import.meta.env.VITE_API_URL) {
+    return "/api/ably/auth";
+  }
+
   const apiUrl = (import.meta.env.VITE_API_URL as string | undefined) || DEFAULT_API_URL;
   return `${apiUrl}/ably/auth`;
 };
@@ -28,7 +34,7 @@ export const isAblyChatEnabled = () => {
 
 let ablyDisabled = false;
 let realtimeClient: Ably.Realtime | null = null;
-const roomPromises = new Map<string, Promise<Ably.Types.RealtimeChannel>>();
+const roomPromises = new Map<string, Promise<Ably.RealtimeChannel>>();
 
 const createRealtimeClient = () => {
   const ablyKey = getAblyKey();
@@ -40,14 +46,14 @@ const createRealtimeClient = () => {
   return new Ably.Realtime({
     authCallback: async (_tokenParams, callback) => {
       if (ablyDisabled) {
-        callback(new Error("Ably disabled"), null);
+        callback({ message: "Ably disabled", code: 400, statusCode: 400, name: "AblyDisabled" }, null);
         return;
       }
       try {
         let res = await fetch(authUrl, { credentials: "include", cache: "no-store" });
         if (res.status === 401) {
           const refreshUrl = getAuthRefreshUrl();
-          await fetch(refreshUrl, { credentials: "include", cache: "no-store" }).catch(() => {});
+          await fetch(refreshUrl, { credentials: "include", cache: "no-store" }).catch(() => { });
           res = await fetch(authUrl, { credentials: "include", cache: "no-store" });
         }
         if (!res.ok) {
@@ -55,13 +61,13 @@ const createRealtimeClient = () => {
           if (payload?.error?.code === "ably_missing") {
             ablyDisabled = true;
           }
-          callback(new Error("Ably auth failed"), null);
+          callback({ message: "Ably auth failed", code: res.status, statusCode: res.status, name: "AuthFailed" }, null);
           return;
         }
         const tokenRequest = await res.json();
         callback(null, tokenRequest);
       } catch (error) {
-        callback(error as Error, null);
+        callback({ message: (error as Error).message, code: 500, statusCode: 500, name: "AuthError" }, null);
       }
     },
   });
@@ -98,7 +104,7 @@ export const getChatRoom = async (roomName: string) => {
 
 export const subscribeToChatRoomMessages = async (
   roomName: string,
-  onMessage: (event: Ably.Types.Message) => void,
+  onMessage: (event: Ably.Message) => void,
 ) => {
   const room = await getChatRoom(roomName);
   if (!room) return null;
@@ -111,7 +117,7 @@ export const subscribeToChatRoomMessages = async (
       const channel = client.channels.get(roomName);
       // Only release when safe; avoid releasing while attaching to prevent Ably errors.
       if (channel.state === "attached") {
-        channel.detach(() => {
+        channel.detach().then(() => {
           client.channels.release(roomName);
         });
       } else if (channel.state === "initialized" || channel.state === "detached" || channel.state === "failed") {

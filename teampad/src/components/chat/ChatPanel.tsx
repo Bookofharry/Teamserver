@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { ImagePlus, MessageCircle, Send, Shield, Trash2, X } from "lucide-react";
+import { ImagePlus, MessageCircle, Send, Shield, Trash2, X, Mic, Square, AudioWaveform } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -260,6 +260,23 @@ const ChatMessageList = memo(function ChatMessageList({
                         ))}
                       </div>
                     )}
+                    {!isDeleted && message.messageType === "audio" && message.attachments?.length > 0 && (
+                      <div className="mt-2 text-foreground">
+                        {message.attachments.map((attachment) => (
+                          <div key={attachment.id} className="flex items-center gap-2 p-3 bg-secondary/50 rounded-xl border border-border/50 max-w-[280px]">
+                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                              <AudioWaveform className="w-4 h-4 text-primary" />
+                            </div>
+                            <audio
+                              controls
+                              src={attachment.url || getAttachmentUrl(bucket, attachment.filePath)}
+                              className="w-full h-8"
+                              style={{ maxHeight: 32 }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="group flex items-center gap-2 text-[11px] text-muted-foreground">
                     {showTimestamp && (
@@ -371,6 +388,134 @@ export function ChatPanel({
   const messageRefs = useRef(new Map<string, HTMLDivElement | null>());
   const pendingLoadMoreRef = useRef(false);
   const prevScrollHeightRef = useRef(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const recordingTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
+
+  const handleStartRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        if (audioChunksRef.current.length === 0) {
+          stream.getTracks().forEach(track => track.stop());
+          return;
+        }
+
+        // Use the recorder's mime type if available, otherwise fallback
+        const mimeType = recorder.mimeType || "audio/webm";
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+
+        if (audioBlob.size === 0) {
+          setErrorMessage("Recording was empty.");
+          stream.getTracks().forEach(track => track.stop());
+          return;
+        }
+
+        await handleUploadAndSendAudio(audioBlob, mimeType);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
+      setIsRecording(true);
+      setRecordingDuration(0);
+      recordingTimerRef.current = window.setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+    } catch (error) {
+      setErrorMessage("Could not access microphone.");
+    }
+  };
+
+  const handleStopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    }
+  };
+
+  const handleCancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      // Prevent onstop from triggering upload
+      mediaRecorderRef.current.onstop = null;
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      setIsRecording(false);
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      audioChunksRef.current = [];
+    }
+  };
+
+  const handleUploadAndSendAudio = async (blob: Blob, mimeType: string) => {
+    if (!workspaceId || !currentUser) return;
+    setUploading(true);
+    try {
+      // Determine file extension from mimeType
+      let ext = "webm";
+      if (mimeType.includes("mp4")) ext = "mp4";
+      else if (mimeType.includes("ogg")) ext = "ogg";
+      else if (mimeType.includes("wav")) ext = "wav";
+
+      const fileName = `voice-note-${Date.now()}.${ext}`;
+      const uploadInfo = await restApi.createChatUpload({
+        workspaceId,
+        fileName,
+        contentType: mimeType,
+        size: blob.size,
+      });
+      await fetch(uploadInfo.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": mimeType },
+        body: blob,
+      });
+
+      await createMessage.mutateAsync({
+        workspaceId,
+        body: "Voice Note",
+        messageType: "audio",
+        attachments: [{
+          filePath: uploadInfo.path,
+          fileName: fileName,
+          contentType: mimeType,
+          size: blob.size,
+        }],
+        mentions: [],
+        optimisticSender: currentUser,
+      });
+    } catch (error) {
+      setErrorMessage("Failed to send voice note.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const formatDuration = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
 
   const bucket = import.meta.env.VITE_CHAT_STORAGE_BUCKET || DEFAULT_BUCKET;
   const ablyEnabled = Boolean(
@@ -838,7 +983,8 @@ export function ChatPanel({
               <div className="flex items-center justify-between gap-2">
                 <span>{focusNotice}</span>
                 <Button
-                  size="xs"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
                   variant="outline"
                   onClick={() => {
                     const container = scrollContainerRef.current;
@@ -920,96 +1066,121 @@ export function ChatPanel({
                 </div>
               </div>
             )}
-            <div className="rounded-2xl border border-border/70 bg-background/95 backdrop-blur-md shadow-sm focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/50">
-              <div className="flex items-end gap-3 px-3 py-3">
-                <Textarea
-                  ref={textAreaRef}
-                  value={messageText}
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
-                    setMessageText(nextValue);
-                    updateMentionState(nextValue, event.target.selectionStart ?? nextValue.length);
-                    if (errorMessage) setErrorMessage(null);
-                  }}
-                  onClick={(event) => {
-                    updateMentionState(
-                      (event.currentTarget as HTMLTextAreaElement).value,
-                      (event.currentTarget as HTMLTextAreaElement).selectionStart ?? messageText.length,
-                    );
-                  }}
-                  onKeyUp={(event) => {
-                    if (["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(event.key)) return;
-                    updateMentionState(
-                      (event.currentTarget as HTMLTextAreaElement).value,
-                      (event.currentTarget as HTMLTextAreaElement).selectionStart ?? messageText.length,
-                    );
-                  }}
-                  onKeyDown={(event) => {
-                    if (mentionIndex !== null && mentionCandidates.length > 0) {
-                      if (event.key === "ArrowDown") {
-                        event.preventDefault();
-                        setActiveMentionIndex((prev) => (prev + 1) % mentionCandidates.length);
-                        return;
-                      }
-                      if (event.key === "ArrowUp") {
-                        event.preventDefault();
-                        setActiveMentionIndex((prev) => (prev - 1 + mentionCandidates.length) % mentionCandidates.length);
-                        return;
-                      }
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        handleMentionSelect(mentionCandidates[activeMentionIndex]);
-                        return;
-                      }
-                      if (event.key === "Escape") {
-                        setMentionIndex(null);
-                        setMentionQuery("");
-                        return;
-                      }
-                    }
-
-                    if (event.key === "Enter" && !event.shiftKey) {
-                      event.preventDefault();
-                      handleSend();
-                    } else if (event.key === "Escape") {
-                      setMentionIndex(null);
-                      setMentionQuery("");
-                      setOpenReactionsFor(null);
-                    }
-                  }}
-                  placeholder={isInputFocused ? "" : "Message the workspace..."}
-                  onFocus={() => setIsInputFocused(true)}
-                  onBlur={() => setIsInputFocused(false)}
-                  className="min-h-[56px] max-h-40 w-full resize-none border-0 bg-transparent px-2 py-2 text-sm sm:text-base focus-visible:ring-0"
-                />
-                <div className="flex items-center gap-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="hidden"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-11 w-11 rounded-full bg-primary/10 text-primary hover:bg-primary/20"
-                    onClick={handleSelectImage}
-                    disabled={uploading}
-                  >
-                    <ImagePlus className="h-5 w-5" />
+            {isRecording ? (
+              <div className="rounded-2xl border border-destructive/20 bg-destructive/5 backdrop-blur-md shadow-sm p-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-2 w-2 rounded-full bg-destructive animate-ping" />
+                  <span className="text-sm font-medium text-destructive flex-1">Recording... {formatDuration(recordingDuration)}</span>
+                  <Button size="sm" variant="ghost" onClick={handleCancelRecording} className="text-muted-foreground hover:text-destructive h-8 px-3">
+                    Cancel
                   </Button>
-                  <Button
-                    size="icon"
-                    className="h-11 w-11 rounded-full"
-                    onClick={handleSend}
-                    disabled={createMessage.isPending || uploading || (!messageText.trim() && !attachmentPath)}
-                  >
-                    <Send className="h-5 w-5" />
+                  <Button size="sm" onClick={handleStopRecording} className="bg-destructive hover:bg-destructive/90 text-white gap-2 h-8 px-3">
+                    <Square className="w-3 h-3" /> Stop & Send
                   </Button>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="rounded-2xl border border-border/70 bg-background/95 backdrop-blur-md shadow-sm focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/50">
+                <div className="flex items-end gap-3 px-3 py-3">
+                  <Textarea
+                    ref={textAreaRef}
+                    value={messageText}
+                    onChange={(event) => {
+                      const nextValue = event.target.value;
+                      setMessageText(nextValue);
+                      updateMentionState(nextValue, event.target.selectionStart ?? nextValue.length);
+                      if (errorMessage) setErrorMessage(null);
+                    }}
+                    onClick={(event) => {
+                      updateMentionState(
+                        (event.currentTarget as HTMLTextAreaElement).value,
+                        (event.currentTarget as HTMLTextAreaElement).selectionStart ?? messageText.length,
+                      );
+                    }}
+                    onKeyUp={(event) => {
+                      if (["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(event.key)) return;
+                      updateMentionState(
+                        (event.currentTarget as HTMLTextAreaElement).value,
+                        (event.currentTarget as HTMLTextAreaElement).selectionStart ?? messageText.length,
+                      );
+                    }}
+                    onKeyDown={(event) => {
+                      if (mentionIndex !== null && mentionCandidates.length > 0) {
+                        if (event.key === "ArrowDown") {
+                          event.preventDefault();
+                          setActiveMentionIndex((prev) => (prev + 1) % mentionCandidates.length);
+                          return;
+                        }
+                        if (event.key === "ArrowUp") {
+                          event.preventDefault();
+                          setActiveMentionIndex((prev) => (prev - 1 + mentionCandidates.length) % mentionCandidates.length);
+                          return;
+                        }
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          handleMentionSelect(mentionCandidates[activeMentionIndex]);
+                          return;
+                        }
+                        if (event.key === "Escape") {
+                          setMentionIndex(null);
+                          setMentionQuery("");
+                          return;
+                        }
+                      }
+
+                      if (event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        handleSend();
+                      } else if (event.key === "Escape") {
+                        setMentionIndex(null);
+                        setMentionQuery("");
+                        setOpenReactionsFor(null);
+                      }
+                    }}
+                    placeholder={isInputFocused ? "" : "Message the workspace..."}
+                    onFocus={() => setIsInputFocused(true)}
+                    onBlur={() => setIsInputFocused(false)}
+                    className="min-h-[56px] max-h-40 w-full resize-none border-0 bg-transparent px-2 py-2 text-sm sm:text-base focus-visible:ring-0"
+                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      className="hidden"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-11 w-11 rounded-full bg-primary/10 text-primary hover:bg-primary/20"
+                      onClick={handleSelectImage}
+                      disabled={uploading}
+                    >
+                      <ImagePlus className="h-5 w-5" />
+                    </Button>
+                    {/* New Mic Button */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-11 w-11 rounded-full bg-primary/10 text-primary hover:bg-primary/20"
+                      onClick={handleStartRecording}
+                      disabled={uploading}
+                    >
+                      <Mic className="h-5 w-5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      className="h-11 w-11 rounded-full"
+                      onClick={handleSend}
+                      disabled={createMessage.isPending || uploading || (!messageText.trim() && !attachmentPath)}
+                    >
+                      <Send className="h-5 w-5" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <p className="text-[11px] text-muted-foreground">
             Mentions highlight and notify immediately.

@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, lazy, Suspense, type PointerEvent as ReactPointerEvent } from 'react';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { NotesList } from '@/components/notes/NotesList';
 import { NoteEditor } from '@/components/notes/NoteEditor';
@@ -76,7 +77,18 @@ export default function Dashboard() {
   const notesPanelWidthRef = useRef(notesPanelWidth);
   const notesLayoutRef = useRef<HTMLDivElement | null>(null);
   const resizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
   const mentionsMarkedRef = useRef(false);
+
+  const [isFocusMode, setIsFocusMode] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem('teampad-focus-mode') === 'true';
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('teampad-focus-mode', String(isFocusMode));
+  }, [isFocusMode]);
 
   const {
     isMobile,
@@ -153,13 +165,7 @@ export default function Dashboard() {
     refetch: refetchNotes,
   } = useNotes(currentWorkspaceId, currentGroupId, debouncedSearchQuery, { limit: notesLimit });
 
-  console.log('[Dashboard] State:', {
-    currentWorkspaceId,
-    currentGroupId,
-    notesCount: notes.length,
-    notesLoading,
-    groupsLoading
-  });
+  // console.log("The tea is hot.");
 
   const { data: workspaceNotes = [] } = useWorkspaceNotes(
     currentWorkspaceId,
@@ -506,6 +512,7 @@ export default function Dashboard() {
   }, [isPremiumPlus, openUpgradeModal]);
 
   const notesListView = useMemo(() => {
+    if (isFocusMode) return null;
     if (isTablet && currentNoteId) return null;
     return (
       <NotesList
@@ -550,7 +557,7 @@ export default function Dashboard() {
     if (isTablet && !currentNoteId) return null;
     return (
       <>
-        {!isTablet && (
+        {!isTablet && !isFocusMode && (
           <div
             className="group relative w-3 cursor-col-resize"
             onPointerDown={handleResizeStart}
@@ -801,62 +808,66 @@ export default function Dashboard() {
 
   return (
     <div className="h-screen flex overflow-hidden bg-background dashboard-sans">
-      <Suspense fallback={sidebarFallback}>
-        <LazyWorkspaceSidebar
-          isMobile={isMobile}
-          open={sidebarOpen}
-          onOpenChange={setSidebarOpen}
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
-          workspaces={workspaces}
-          currentWorkspace={currentWorkspace}
-          groups={groups}
-          isGroupsLoading={groupsLoading}
-          isGroupsError={isGroupsError}
-          groupsErrorMessage={groupsErrorMessage}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          currentGroupId={currentGroupId}
-          onWorkspaceChange={handleWorkspaceChange}
-          onCreateWorkspace={handleCreateWorkspaceIntent}
-          isCreateWorkspaceLocked={isCreateWorkspaceLocked}
-          onGroupSelect={handleGroupSelect}
-          onCreateGroup={handleCreateGroup}
-          onDeleteGroup={handleDeleteGroup}
-          isWorkspaceOwner={Boolean(isWorkspaceOwner)}
-          onOpenMembers={() => setMembersDialogOpen(true)}
-          onOpenSettings={handleOpenSettings}
-          onOpenChat={() => setShowChatPanel(true)}
-          onRetryGroups={refetchGroups}
-          onOpenArchive={() => navigate(`/workspaces/${currentWorkspaceId}/trash`)}
-          onLogout={handleLogout}
-        />
-      </Suspense>
+      {!isFocusMode && (
+        <Suspense fallback={sidebarFallback}>
+          <LazyWorkspaceSidebar
+            isMobile={isMobile}
+            open={sidebarOpen}
+            onOpenChange={setSidebarOpen}
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
+            workspaces={workspaces}
+            currentWorkspace={currentWorkspace}
+            groups={groups}
+            isGroupsLoading={groupsLoading}
+            isGroupsError={isGroupsError}
+            groupsErrorMessage={groupsErrorMessage}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            currentGroupId={currentGroupId}
+            onWorkspaceChange={handleWorkspaceChange}
+            onCreateWorkspace={handleCreateWorkspaceIntent}
+            isCreateWorkspaceLocked={isCreateWorkspaceLocked}
+            onGroupSelect={handleGroupSelect}
+            onCreateGroup={handleCreateGroup}
+            onDeleteGroup={handleDeleteGroup}
+            isWorkspaceOwner={Boolean(isWorkspaceOwner)}
+            onOpenMembers={() => setMembersDialogOpen(true)}
+            onOpenSettings={handleOpenSettings}
+            onOpenChat={() => setShowChatPanel(true)}
+            onRetryGroups={refetchGroups}
+            onOpenArchive={() => navigate(`/workspaces/${currentWorkspaceId}/trash`)}
+            onLogout={handleLogout}
+          />
+        </Suspense>
+      )}
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header
-          user={
-            me ?? {
-              id: 'unknown',
-              name: 'Account',
-              email: '',
-              twoFactorEnabled: false,
-              isSubscribed: false,
-              plan: 'free',
+        {!isFocusMode && (
+          <Header
+            user={
+              me ?? {
+                id: 'unknown',
+                name: 'Account',
+                email: '',
+                twoFactorEnabled: false,
+                isSubscribed: false,
+                plan: 'free',
+              }
             }
-          }
-          groupName={currentGroup?.name}
-          onOpenSidebar={isMobile ? () => setSidebarOpen(true) : undefined}
-          onOpenAIPanel={handleOpenAIPanel}
-          onOpenChat={() => setShowChatPanel(true)}
-          chatUnreadCount={chatUnreadCount}
-          chatMentionCount={chatMentionCount}
-          mentionNotifications={chatMentions}
-          mentionsLoading={chatMentionsLoading}
-          onMentionsOpen={handleMentionsOpen}
-          onMentionsMarkAll={handleMentionsMarkAll}
-          onMentionSelect={handleMentionSelect}
-        />
+            groupName={currentGroup?.name}
+            onOpenSidebar={isMobile ? () => setSidebarOpen(true) : undefined}
+            onOpenAIPanel={handleOpenAIPanel}
+            onOpenChat={() => setShowChatPanel(true)}
+            chatUnreadCount={chatUnreadCount}
+            chatMentionCount={chatMentionCount}
+            mentionNotifications={chatMentions}
+            mentionsLoading={chatMentionsLoading}
+            onMentionsOpen={handleMentionsOpen}
+            onMentionsMarkAll={handleMentionsMarkAll}
+            onMentionSelect={handleMentionSelect}
+          />
+        )}
 
         {showPlanDebug && me && (
           <div className="mx-6 mt-4 mb-2 rounded-xl border border-border bg-secondary/30 px-4 py-2">
@@ -973,6 +984,13 @@ export default function Dashboard() {
           />
         </Suspense>
       )}
+      <button
+        onClick={() => setIsFocusMode(!isFocusMode)}
+        className="fixed bottom-6 right-6 z-50 p-3 rounded-full bg-primary/90 text-primary-foreground shadow-lg hover:bg-primary transition-all hover:scale-105"
+        title={isFocusMode ? "Exit Focus Mode" : "Enter Focus Mode"}
+      >
+        {isFocusMode ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+      </button>
     </div>
   );
 }

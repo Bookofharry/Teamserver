@@ -214,6 +214,8 @@ type PaginationParams = {
 const DEFAULT_API_URL = "https://teamserver.vercel.app/api";
 const DEFAULT_TIMEOUT_MS = 12000;
 const AUTH_LOST_EVENT = "teampad:auth-lost";
+const CSRF_COOKIE_NAME = "csrf_token";
+let cachedCsrfToken = "";
 
 const notifyAuthLost = () => {
   if (typeof window === "undefined") return;
@@ -423,6 +425,10 @@ const normalizeUser = (user?: Partial<User>): User => {
     lastWorkspaceId: (user as { lastWorkspaceId?: string | null; last_workspace_id?: string | null })?.lastWorkspaceId
       ?? (user as { last_workspace_id?: string | null })?.last_workspace_id
       ?? null,
+    status: (user as { status?: string | null })?.status ?? null,
+    statusEmoji: (user as { statusEmoji?: string | null; status_emoji?: string | null })?.statusEmoji
+      ?? (user as { status_emoji?: string | null })?.status_emoji
+      ?? null,
   };
 };
 
@@ -630,7 +636,13 @@ export const restApi = {
     await refreshSession();
   },
 
-  async updateMe(input: { name?: string; avatar?: string; lastWorkspaceId?: string | null }): Promise<User> {
+  async updateMe(input: {
+    name?: string;
+    avatar?: string;
+    lastWorkspaceId?: string | null;
+    status?: string | null;
+    statusEmoji?: string | null;
+  }): Promise<User> {
     const data = await request<Partial<User>>("/me", {
       method: "PATCH",
       body: JSON.stringify(input),
@@ -775,6 +787,12 @@ export const restApi = {
       },
     );
     return { userId: data.userId };
+  },
+
+  async leaveWorkspace(workspaceId: string): Promise<{ left: boolean; workspaceId: string }> {
+    return request<{ left: boolean; workspaceId: string }>(`/workspaces/${workspaceId}/leave`, {
+      method: "POST",
+    });
   },
 
   async createInvite(input: {
@@ -1041,7 +1059,7 @@ export const restApi = {
   async createChatMessage(input: {
     workspaceId: string;
     body?: string;
-    messageType?: "text" | "image";
+    messageType?: "text" | "image" | "audio";
     attachments?: Array<{
       filePath: string;
       fileName?: string | null;
@@ -1150,5 +1168,21 @@ export const restApi = {
   async getChatUnreadCounts(workspaceId: string, since: string): Promise<ChatUnreadResponse> {
     const params = new URLSearchParams({ since });
     return request<ChatUnreadResponse>(`/workspaces/${workspaceId}/chat/unread?${params.toString()}`);
+  },
+
+  async listChatMentions(
+    workspaceId: string,
+    status: "unread" | "all" = "unread",
+  ): Promise<ChatMentionNotification[]> {
+    const params = new URLSearchParams({ status });
+    const data = await request<ChatMentionNotificationResponse[]>(
+      `/workspaces/${workspaceId}/chat/mentions?${params.toString()}`,
+    );
+    return data.map(normalizeChatMentionNotification);
+  },
+
+  async listChatAudits(workspaceId: string): Promise<ChatAudit[]> {
+    const data = await request<ChatAuditResponse[]>(`/workspaces/${workspaceId}/chat/audits`);
+    return data.map(normalizeChatAudit);
   },
 };

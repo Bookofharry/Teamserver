@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Copy } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Copy, SmilePlus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ColorizedText } from '@/components/ui/colorized-text';
@@ -18,8 +19,10 @@ import {
   useCreateInvite,
   useMe,
   useRemoveWorkspaceMember,
+  useLeaveWorkspace,
   useWorkspaceInvites,
   useWorkspaceMembers,
+  useUpdateProfile,
 } from '@/hooks/use-data';
 import { useToast } from '@/hooks/use-toast';
 import { sanitizeEmail } from '@/lib/sanitize';
@@ -35,11 +38,44 @@ export function MembersDialog({ open, onOpenChange, workspace }: MembersDialogPr
   const { toast } = useToast();
   const { data: members = [], isLoading } = useWorkspaceMembers(workspace.id, open);
   const { data: me } = useMe(open);
+  const navigate = useNavigate();
   const createInvite = useCreateInvite();
   const removeMember = useRemoveWorkspaceMember();
+  const leaveWorkspace = useLeaveWorkspace();
+  const updateProfile = useUpdateProfile();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<UserRole>('member');
   const [showInviteForm, setShowInviteForm] = useState(false);
+
+  // Status State
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [editStatusText, setEditStatusText] = useState('');
+  const [editStatusEmoji, setEditStatusEmoji] = useState('');
+
+  useEffect(() => {
+    if (statusDialogOpen && me) {
+      setEditStatusText(me.status || '');
+      setEditStatusEmoji(me.statusEmoji || '');
+    }
+  }, [statusDialogOpen, me]);
+
+  const handleSaveStatus = async (event: React.FormEvent) => {
+    event.preventDefault();
+    try {
+      await updateProfile.mutateAsync({
+        status: editStatusText.trim() || null,
+        statusEmoji: editStatusEmoji.trim() || null,
+      });
+      setStatusDialogOpen(false);
+      toast({ title: 'Status updated', description: 'Your vibe has been shared.' });
+    } catch (error) {
+      toast({
+        title: 'Update failed',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   useEffect(() => {
     if (!open) {
@@ -145,6 +181,26 @@ export function MembersDialog({ open, onOpenChange, workspace }: MembersDialogPr
     }
   };
 
+  const handleLeaveWorkspace = async () => {
+    const confirmed = window.confirm(`Are you sure you want to leave ${workspace.name}?`);
+    if (!confirmed) return;
+    try {
+      await leaveWorkspace.mutateAsync(workspace.id);
+      toast({
+        title: 'Left workspace',
+        description: `You left ${workspace.name}.`,
+      });
+      onOpenChange(false);
+      navigate('/');
+    } catch (error) {
+      toast({
+        title: 'Failed to leave',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[calc(100vw-32px)] sm:max-w-[520px] rounded-2xl w-full translate-x-[-50%] translate-y-[-50%] left-[50%] top-[50%] p-6">
@@ -191,8 +247,29 @@ export function MembersDialog({ open, onOpenChange, workspace }: MembersDialogPr
                             <p className="text-sm font-medium">
                               <ColorizedText text={member.user.name} />
                               {isYou && <span className="ml-2 text-xs text-muted-foreground">(You)</span>}
+                              {isYou && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5 ml-1 text-muted-foreground hover:text-foreground"
+                                  onClick={() => setStatusDialogOpen(true)}
+                                  title="Set status"
+                                >
+                                  <SmilePlus className="h-3 w-3" />
+                                </Button>
+                              )}
                             </p>
-                            <p className="text-xs text-muted-foreground">{member.user.email}</p>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              {member.user.email}
+                              {(member.user.status || member.user.statusEmoji) && (
+                                <>
+                                  <span className="mx-1">·</span>
+                                  <span className="text-foreground">
+                                    {member.user.statusEmoji} {member.user.status}
+                                  </span>
+                                </>
+                              )}
+                            </p>
                           </div>
                           <div className="flex items-center gap-2">
                             <Badge
@@ -216,6 +293,17 @@ export function MembersDialog({ open, onOpenChange, workspace }: MembersDialogPr
                                 disabled={removeMember.isPending}
                               >
                                 Remove
+                              </Button>
+                            )}
+                            {isYou && (currentRole !== 'owner' || ownerCount > 1) && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={handleLeaveWorkspace}
+                                disabled={leaveWorkspace.isPending}
+                              >
+                                Leave
                               </Button>
                             )}
                           </div>
@@ -346,6 +434,50 @@ export function MembersDialog({ open, onOpenChange, workspace }: MembersDialogPr
           )}
         </div>
       </DialogContent>
+
+      <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Set your status</DialogTitle>
+            <DialogDescription>
+              Share your vibe with the workspace.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveStatus} className="space-y-4">
+            <div className="grid grid-cols-[60px_1fr] gap-2">
+              <div className="space-y-2">
+                <Label htmlFor="status-emoji">Emoji</Label>
+                <Input
+                  id="status-emoji"
+                  value={editStatusEmoji}
+                  onChange={(e) => setEditStatusEmoji(e.target.value)}
+                  placeholder="👋"
+                  className="text-center text-lg"
+                  maxLength={2}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="status-text">Message</Label>
+                <Input
+                  id="status-text"
+                  value={editStatusText}
+                  onChange={(e) => setEditStatusText(e.target.value)}
+                  placeholder="What's your focus today?"
+                  maxLength={40}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setStatusDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={updateProfile.isPending}>
+                {updateProfile.isPending ? 'Saving...' : 'Save Status'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

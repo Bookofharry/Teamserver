@@ -3,7 +3,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useEffect } from "react";
 import { api } from "@/api";
 import { getWorkspaceRoomName, isAblyChatEnabled, publishChatEvent } from "@/lib/ablyChat";
-import type { AdminUser, ChatAudit, ChatMentionNotification, ChatMessage, ChatReaction, Group, InviteDetails, Note, NoteAttachment, NoteVersionDetail, NoteVersionsPage, PlanTier, User, UserRole, Workspace, WorkspaceInvite, WorkspaceMember } from "@/types";
+import type { AdminUser, ChatAudit, ChatMentionNotification, ChatMessage, ChatReaction, Group, InviteDetails, Note, NoteAttachment, NoteVersion, NoteVersionDetail, NoteVersionsPage, PlanTier, User, UserRole, Workspace, WorkspaceInvite, WorkspaceMember } from "@/types";
 
 const normalizeDate = (value?: string | Date | null) =>
   value ? (value instanceof Date ? value : new Date(value)) : null;
@@ -48,7 +48,13 @@ export const useMe = (enabled = true) =>
 export const useUpdateProfile = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { name?: string; avatar?: string; lastWorkspaceId?: string | null }) => api.updateMe(input),
+    mutationFn: (input: {
+      name?: string;
+      avatar?: string;
+      lastWorkspaceId?: string | null;
+      status?: string | null;
+      statusEmoji?: string | null;
+    }) => api.updateMe(input),
     onSuccess: (user) => {
       queryClient.setQueryData<User>(["me"], user);
     },
@@ -177,6 +183,20 @@ export const useRemoveWorkspaceMember = () => {
         ["workspace-members", variables.workspaceId],
         (existing = []) => existing.filter((member) => member.userId !== variables.userId),
       );
+    },
+  });
+};
+
+export const useLeaveWorkspace = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (workspaceId: string) => api.leaveWorkspace(workspaceId),
+    onSuccess: (_, workspaceId) => {
+      queryClient.setQueryData<Workspace[]>(
+        ["workspaces"],
+        (existing = []) => existing.filter((w) => w.id !== workspaceId),
+      );
+      queryClient.invalidateQueries({ queryKey: ["workspaces"] });
     },
   });
 };
@@ -448,7 +468,7 @@ export const useRestoreNote = () => {
 };
 
 export const useNoteVersions = (noteId: string | null, enabled = true) =>
-  useQuery<NoteVersionsPage>({
+  useQuery<NoteVersion[]>({
     queryKey: ["note-versions", noteId],
     queryFn: () => api.listNoteVersions(noteId as string),
     enabled: Boolean(noteId && enabled),
@@ -565,7 +585,7 @@ export const useCreateChatMessage = () => {
     mutationFn: (input: {
       workspaceId: string;
       body?: string;
-      messageType?: "text" | "image";
+      messageType?: "text" | "image" | "audio";
       attachments?: Array<{ filePath: string; fileName?: string | null; contentType?: string | null; size?: number | null }>;
       mentions?: Array<{ userId: string; text?: string | null; startIndex?: number | null; endIndex?: number | null }>;
       optimisticSender?: User;
