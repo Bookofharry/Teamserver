@@ -73,6 +73,13 @@ export const buildAuthCookieOptions = (payload) => {
       : isProd
 
   let domain = process.env.AUTH_COOKIE_DOMAIN
+
+  // Ignore domain config in Vercel Preview/Dev to avoid mismatch with unique preview URLs
+  const isPreview = process.env.VERCEL_ENV === 'preview' || process.env.VERCEL_ENV === 'development'
+  if (isPreview) {
+    domain = undefined
+  }
+
   if (domain) {
     domain = domain.replace(/^https?:\/\//, '').split(':')[0]
   }

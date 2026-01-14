@@ -13,7 +13,8 @@ export const getAblyAuthUrl = () => {
     return "/api/ably/auth";
   }
 
-  const apiUrl = (import.meta.env.VITE_API_URL as string | undefined) || DEFAULT_API_URL;
+  const rawUrl = (import.meta.env.VITE_API_URL as string | undefined) || DEFAULT_API_URL;
+  const apiUrl = rawUrl.replace(/\/+$/, "");
   return `${apiUrl}/ably/auth`;
 };
 
@@ -22,7 +23,8 @@ const getAuthRefreshUrl = () => {
   if (authUrl.endsWith("/ably/auth")) {
     return authUrl.replace(/\/ably\/auth$/, "/auth/refresh");
   }
-  const apiUrl = (import.meta.env.VITE_API_URL as string | undefined) || DEFAULT_API_URL;
+  const rawUrl = (import.meta.env.VITE_API_URL as string | undefined) || DEFAULT_API_URL;
+  const apiUrl = rawUrl.replace(/\/+$/, "");
   return `${apiUrl}/auth/refresh`;
 };
 
