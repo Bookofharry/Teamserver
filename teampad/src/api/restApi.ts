@@ -224,8 +224,7 @@ const notifyAuthLost = () => {
 const getApiUrl = () => {
   const url = import.meta.env.VITE_API_URL;
   if (!url) {
-    console.warn("VITE_API_URL is not defined! API requests will fail.");
-    return "";
+    return "/api";
   }
   return url.replace(/\/+$/, "");
 };
