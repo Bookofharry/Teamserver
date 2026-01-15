@@ -222,6 +222,12 @@ const notifyAuthLost = () => {
 };
 
 const getApiUrl = () => {
+  // FIX: Force relative path in browser to ensure Vercel Proxy is used.
+  // This allows 'Set-Cookie' to work in Brave/Safari by avoiding Cross-Site context.
+  if (typeof window !== "undefined") {
+    return "/api";
+  }
+
   const url = import.meta.env.VITE_API_URL;
   if (!url) {
     return "/api";

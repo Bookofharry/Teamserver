@@ -8,8 +8,13 @@ export const getAblyAuthUrl = () => {
   const explicit = import.meta.env.VITE_ABLY_AUTH_URL as string | undefined;
   if (explicit) return explicit;
 
+  // FIX: Force relative path in browser to ensure Vercel Proxy is used.
+  // This is CRITICAL for Brave/Safari which block Cross-Site Cookies.
+  if (typeof window !== "undefined") {
+    return "/api/ably/auth";
+  }
+
   const rawUrl = (import.meta.env.VITE_API_URL as string | undefined) || "/api";
-  // Robustly strip trailing slashesmmmm 
   const apiUrl = rawUrl.replace(/\/+$/, "");
   return `${apiUrl}/ably/auth`;
 };
