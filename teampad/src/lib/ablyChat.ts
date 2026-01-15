@@ -9,7 +9,7 @@ export const getAblyAuthUrl = () => {
   if (explicit) return explicit;
 
   const rawUrl = (import.meta.env.VITE_API_URL as string | undefined) || "/api";
-  // Robustly strip trailing slashes
+  // Robustly strip trailing slashesmmmm 
   const apiUrl = rawUrl.replace(/\/+$/, "");
   return `${apiUrl}/ably/auth`;
 };
