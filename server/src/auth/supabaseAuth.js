@@ -114,6 +114,8 @@ export const getAuthCookieName = () => resolveAuthCookieName()
 export const requireSupabaseAuth = async (req, res, next) => {
   try {
     const token = getAuthToken(req)
+    console.log(`[Auth Debug] Path: ${req.path} | CookieHeader: ${!!req.headers.cookie} | TokenFound: ${!!token}`);
+
     if (!token) {
       if (process.env.NODE_ENV !== 'production') {
         logger.warn({
@@ -135,6 +137,7 @@ export const requireSupabaseAuth = async (req, res, next) => {
     }
     return next()
   } catch (error) {
+    console.error(`[Auth Debug] Verification Failed: ${error.message}`, error);
     if (process.env.NODE_ENV !== 'production') {
       logger.warn({ name: error?.name, message: error?.message }, 'Auth token verification failed')
     }
