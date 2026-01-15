@@ -8,13 +8,8 @@ export const getAblyAuthUrl = () => {
   const explicit = import.meta.env.VITE_ABLY_AUTH_URL as string | undefined;
   if (explicit) return explicit;
 
-  // Force relative path in browser to ensure Vercel Proxy is used
-  // This ignores VITE_API_URL to prevent accidental Cross-Site requests
-  if (!import.meta.env.SSR) {
-    return "/api/ably/auth";
-  }
-
   const rawUrl = (import.meta.env.VITE_API_URL as string | undefined) || "/api";
+  // Robustly strip trailing slashes
   const apiUrl = rawUrl.replace(/\/+$/, "");
   return `${apiUrl}/ably/auth`;
 };
@@ -23,11 +18,6 @@ const getAuthRefreshUrl = () => {
   const authUrl = getAblyAuthUrl();
   if (authUrl.endsWith("/ably/auth")) {
     return authUrl.replace(/\/ably\/auth$/, "/auth/refresh");
-  }
-
-  // Force relative path in browser
-  if (!import.meta.env.SSR) {
-    return "/api/auth/refresh";
   }
 
   const rawUrl = (import.meta.env.VITE_API_URL as string | undefined) || "/api";

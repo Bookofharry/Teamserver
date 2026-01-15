@@ -222,16 +222,11 @@ const notifyAuthLost = () => {
 };
 
 const getApiUrl = () => {
-  // In the browser, ALWAYS use the relative proxy path to avoid CORS and Double-Slash issues.
-  // This overrides any potential stale environment variables from the build.
-  if (typeof window !== "undefined") {
-    return "/api";
-  }
-
   const url = import.meta.env.VITE_API_URL;
   if (!url) {
     return "/api";
   }
+  // Robustly strip ALL trailing slashes to prevent double-slash issues (e.g. ".../api/" -> ".../api")
   return url.replace(/\/+$/, "");
 };
 
