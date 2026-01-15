@@ -172,7 +172,7 @@ export const signup = async (req, res) => {
     exp: Math.floor(Date.now() / 1000) + getAuthTokenTtlSeconds(),
   })
   res.cookie(getAuthCookieName(), token, cookieOptions)
-  return res.json({ data: toSessionResponse({ userId, email }) })
+  return res.json({ data: toSessionResponse({ userId, email, accessToken: token }) })
 }
 
 export const requestSignupOtp = async (req, res) => {
@@ -307,7 +307,7 @@ export const verifySignupOtp = async (req, res) => {
     exp: Math.floor(Date.now() / 1000) + getAuthTokenTtlSeconds(),
   })
   res.cookie(getAuthCookieName(), token, cookieOptions)
-  return res.json({ data: toSessionResponse({ userId, email }) })
+  return res.json({ data: toSessionResponse({ userId, email, accessToken: token }) })
 }
 
 export const login = async (req, res) => {
@@ -383,7 +383,7 @@ export const login = async (req, res) => {
   res.cookie(getAuthCookieName(), token, cookieOptions)
   await supabase.from('users').update({ last_login_at: new Date().toISOString() }).eq('id', userRow.id)
 
-  return res.json({ data: toSessionResponse({ userId: userRow.id, email: userRow.email }) })
+  return res.json({ data: toSessionResponse({ userId: userRow.id, email: userRow.email, accessToken: token }) })
 }
 
 export const clearSession = async (_req, res) => {
@@ -405,7 +405,7 @@ export const refreshSession = async (req, res) => {
   })
   res.cookie(getAuthCookieName(), token, cookieOptions)
   res.setHeader('Cache-Control', 'no-store')
-  return res.json({ data: toSessionResponse({ userId: req.auth.userId, email: req.auth.email }) })
+  return res.json({ data: toSessionResponse({ userId: req.auth.userId, email: req.auth.email, accessToken: token }) })
 }
 
 export const checkEmail = async (req, res) => {

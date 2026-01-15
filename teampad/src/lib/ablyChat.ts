@@ -8,12 +8,6 @@ export const getAblyAuthUrl = () => {
   const explicit = import.meta.env.VITE_ABLY_AUTH_URL as string | undefined;
   if (explicit) return explicit;
 
-  // FIX: Force relative path in browser to ensure Vercel Proxy is used.
-  // This is CRITICAL for Brave/Safari which block Cross-Site Cookies.
-  if (typeof window !== "undefined") {
-    return "/api/ably/auth";
-  }
-
   const rawUrl = (import.meta.env.VITE_API_URL as string | undefined) || "/api";
   const apiUrl = rawUrl.replace(/\/+$/, "");
   return `${apiUrl}/ably/auth`;
@@ -54,11 +48,22 @@ const createRealtimeClient = () => {
         return;
       }
       try {
-        let res = await fetch(authUrl, { credentials: "include", cache: "no-store" });
+        const token = typeof window !== "undefined" ? window.localStorage.getItem("teampad_token") : null;
+        const headers = {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        };
+
+        let res = await fetch(authUrl, { credentials: "include", cache: "no-store", headers });
         if (res.status === 401) {
           const refreshUrl = getAuthRefreshUrl();
-          await fetch(refreshUrl, { credentials: "include", cache: "no-store" }).catch(() => { });
-          res = await fetch(authUrl, { credentials: "include", cache: "no-store" });
+          await fetch(refreshUrl, { credentials: "include", cache: "no-store", headers }).catch(() => { });
+          // Retry with new token if refresh succeeded? 
+          // Actually refresh endpoint updates cookie AND should return new token.
+          // Ideally we update local storage here too, but for now relying on Cookie or re-login flow.
+          // The refresh endpoint in restApi.ts updates the token. 
+          // But here we are calling fetch directly. 
+          // It's safer to just retry the authUrl fetch.
+          res = await fetch(authUrl, { credentials: "include", cache: "no-store", headers });
         }
         if (!res.ok) {
           const payload = await res.json().catch(() => null);

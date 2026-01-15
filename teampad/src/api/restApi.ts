@@ -214,6 +214,8 @@ type PaginationParams = {
 const DEFAULT_TIMEOUT_MS = 12000;
 const AUTH_LOST_EVENT = "teampad:auth-lost";
 const CSRF_COOKIE_NAME = "csrf_token";
+const AUTH_TOKEN_KEY = "teampad_token";
+
 let cachedCsrfToken = "";
 
 const notifyAuthLost = () => {
@@ -222,17 +224,11 @@ const notifyAuthLost = () => {
 };
 
 const getApiUrl = () => {
-  // FIX: Force relative path in browser to ensure Vercel Proxy is used.
-  // This allows 'Set-Cookie' to work in Brave/Safari by avoiding Cross-Site context.
-  if (typeof window !== "undefined") {
-    return "/api";
-  }
-
   const url = import.meta.env.VITE_API_URL;
   if (!url) {
     return "/api";
   }
-  // Robustly strip ALL trailing slashes to prevent double-slash issues (e.g. ".../api/" -> ".../api")
+  // Robustly strip ALL trailing slashes to prevent double-slash issues
   return url.replace(/\/+$/, "");
 };
 
@@ -251,6 +247,20 @@ const getCookie = (name: string) => {
   return parts.pop()?.split(";").shift() ?? "";
 };
 
+const getAuthToken = () => {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(AUTH_TOKEN_KEY);
+};
+
+const setAuthToken = (token: string | null) => {
+  if (typeof window === "undefined") return;
+  if (token) {
+    window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+  } else {
+    window.localStorage.removeItem(AUTH_TOKEN_KEY);
+  }
+};
+
 // CSRF disabled on client; helper kept for API compatibility.
 export const getCsrfToken = async () => "";
 
@@ -265,10 +275,18 @@ const refreshSession = async () => {
   const res = await fetch(`${getApiUrl()}/auth/refresh`, {
     credentials: "include",
     cache: "no-store",
+    headers: {
+      ...(getAuthToken() ? { Authorization: `Bearer ${getAuthToken()}` } : {}),
+    },
   });
   const responseToken = res.headers.get("X-CSRF-Token");
   if (responseToken) cachedCsrfToken = responseToken;
-  const payload = (await res.json().catch(() => null)) as ApiResponse<{ userId: string; email: string }> | null;
+  const payload = (await res.json().catch(() => null)) as ApiResponse<{ userId: string; email: string; accessToken?: string }> | null;
+
+  if (res.ok && payload?.data?.accessToken) {
+    setAuthToken(payload.data.accessToken);
+  }
+
   if (!res.ok) {
     const message =
       payload && "error" in payload && payload.error
@@ -308,6 +326,7 @@ const request = async <T>(
 ): Promise<T> => {
   const method = (options.method || "GET").toUpperCase();
   const csrfToken = ""; // CSRF disabled
+  const authToken = getAuthToken();
   const controller = options.signal ? null : new AbortController();
   const timeoutId = controller ? setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS) : null;
   let res: Response;
@@ -319,6 +338,7 @@ const request = async <T>(
       headers: {
         "Content-Type": "application/json",
         ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         ...options.headers,
       },
     });
@@ -609,23 +629,33 @@ export const restApi = {
     password: string;
     code: string;
   }): Promise<{ userId: string; email?: string }> {
-    return request<{ userId: string; email?: string }>("/auth/signup/verify", {
+    const data = await request<{ userId: string; email?: string; accessToken?: string }>("/auth/signup/verify", {
       method: "POST",
       body: JSON.stringify(input),
     });
+    if (data.accessToken) {
+      setAuthToken(data.accessToken);
+    }
+    return data;
   },
 
   async login(input: { email: string; password: string }): Promise<{ userId: string; email?: string }> {
-    return request<{ userId: string; email?: string }>("/auth/login", {
+    const data = await request<{ userId: string; email?: string; accessToken?: string }>("/auth/login", {
       method: "POST",
       body: JSON.stringify(input),
     });
+    if (data.accessToken) {
+      setAuthToken(data.accessToken);
+    }
+    return data;
   },
 
   async clearSession(): Promise<{ cleared: boolean }> {
-    return request<{ cleared: boolean }>("/auth/logout", {
+    const res = await request<{ cleared: boolean }>("/auth/logout", {
       method: "POST",
     });
+    setAuthToken(null);
+    return res;
   },
 
   async forgotPassword(email: string): Promise<{ sent: boolean }> {
