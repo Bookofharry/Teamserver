@@ -1,4 +1,4 @@
-import { SignJWT, jwtVerify } from 'jose'
+import jwt from 'jsonwebtoken'
 import logger from '../utils/logger.js'
 
 const getJwtSecret = () => (process.env.AUTH_JWT_SECRET || '').trim()
@@ -38,18 +38,21 @@ export const createAuthToken = async ({ userId, email, role = 'authenticated', n
   // DEBUG: Fingerprint the secret for consistency check
   console.log(`[Auth Debug] Signing Token. Secret Fingerprint: Len=${secretValue.length}, Start="${secretValue.slice(0, 3)}..."`);
 
-  const secret = new TextEncoder().encode(secretValue)
   const ttlSeconds = getAuthTokenTtlSeconds()
-  const now = Math.floor(Date.now() / 1000)
+  const payload = { email, role, name }
 
-  return new SignJWT({ email, role, name })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuedAt(now)
-    .setIssuer(getJwtIssuer())
-    .setAudience(getJwtAudience())
-    .setSubject(userId)
-    .setExpirationTime(now + ttlSeconds)
-    .sign(secret)
+  return new Promise((resolve, reject) => {
+    jwt.sign(payload, secretValue, {
+      algorithm: 'HS256',
+      expiresIn: ttlSeconds,
+      issuer: getJwtIssuer(),
+      audience: getJwtAudience(),
+      subject: userId
+    }, (err, token) => {
+      if (err) reject(err);
+      else resolve(token);
+    });
+  });
 }
 
 export const verifySupabaseToken = async (token) => {
@@ -60,13 +63,16 @@ export const verifySupabaseToken = async (token) => {
   // DEBUG: Fingerprint the secret during verify
   console.log(`[Auth Debug] Verifying Token. Secret Fingerprint: Len=${secretValue.length}, Start="${secretValue.slice(0, 3)}..."`);
 
-  const secret = new TextEncoder().encode(secretValue)
-  const { payload } = await jwtVerify(token, secret, {
-    algorithms: ['HS256'],
-    issuer: getJwtIssuer(),
-    audience: getJwtAudience(),
-  })
-  return payload
+  return new Promise((resolve, reject) => {
+    jwt.verify(token, secretValue, {
+      algorithms: ['HS256'],
+      issuer: getJwtIssuer(),
+      audience: getJwtAudience()
+    }, (err, decoded) => {
+      if (err) reject(err);
+      else resolve(decoded);
+    });
+  });
 }
 
 export const buildAuthCookieOptions = (payload) => {
@@ -99,6 +105,17 @@ export const buildAuthCookieOptions = (payload) => {
     domain = domain.replace(/^https?:\/\//, '').split(':')[0]
   }
 
+  // Handle 'exp' from payload (which is seconds since epoch for JWT)
+  let maxAge = undefined;
+  if (payload?.exp) {
+    const msRemaining = payload.exp * 1000 - Date.now();
+    if (msRemaining > 0) {
+      maxAge = msRemaining;
+    }
+  }
+
+  // If no exp in payload, use default TTL for cookie
+  /*
   const options = {
     httpOnly: true,
     secure,
@@ -106,13 +123,17 @@ export const buildAuthCookieOptions = (payload) => {
     path: '/',
     ...(domain ? { domain } : {}),
   }
-  if (payload?.exp) {
-    const maxAge = Math.max(payload.exp * 1000 - Date.now(), 0)
-    if (maxAge > 0) {
-      options.maxAge = maxAge
-    }
+  if (maxAge) options.maxAge = maxAge;
+  */
+
+  return {
+    httpOnly: true,
+    secure,
+    sameSite,
+    path: '/',
+    ...(domain ? { domain } : {}),
+    ...(maxAge ? { maxAge } : {})
   }
-  return options
 }
 
 export const getAuthCookieName = () => resolveAuthCookieName()
