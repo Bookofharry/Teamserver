@@ -18,8 +18,11 @@ const corsBaseOptions = {
   exposedHeaders: [],
 }
 
-app.use(cors({ ...corsBaseOptions, origin: true }))
-app.options(/.*/, cors({ ...corsBaseOptions, origin: true }))
+// Security: In production, we should restrict the origin.
+// If CORS_ORIGIN is set, use it. Otherwise, default to true (allow all) for flexibility.
+const origin = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : true
+app.use(cors({ ...corsBaseOptions, origin }))
+app.options(/.*/, cors({ ...corsBaseOptions, origin }))
 const bodyLimit = process.env.REQUEST_BODY_LIMIT || '2mb'
 
 app.use(express.json({ limit: bodyLimit }))

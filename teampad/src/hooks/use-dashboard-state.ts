@@ -112,10 +112,20 @@ export function useDashboardState() {
   };
 
   const handleLogout = async () => {
-    setSidebarOpen(false);
+    try {
+      await api.clearSession();
+    } catch (e) {
+      // Ignore errors, force logout anyway
+    }
+    // Ensure local token is gone (matches key in restApi.ts)
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("teampad_token");
+    }
+    queryClient.clear(); // Clear all cached data (User, Workspaces)
     markGuest();
-    navigate('/auth?view=login', { replace: true });
-    await api.clearSession();
+    setSidebarOpen(false);
+    // Hard reload to ensure clean state (Socket connections, etc)
+    window.location.href = '/auth?view=login';
   };
 
   const handleWorkspaceChange = (workspace: Workspace) => {
