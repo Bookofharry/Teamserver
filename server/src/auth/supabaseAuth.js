@@ -35,6 +35,9 @@ export const createAuthToken = async ({ userId, email, role = 'authenticated', n
   if (!secretValue) {
     throw new Error('AUTH_JWT_SECRET is not set')
   }
+  // DEBUG: Fingerprint the secret for consistency check
+  console.log(`[Auth Debug] Signing Token. Secret Fingerprint: Len=${secretValue.length}, Start="${secretValue.slice(0, 3)}..."`);
+
   const secret = new TextEncoder().encode(secretValue)
   const ttlSeconds = getAuthTokenTtlSeconds()
   const now = Math.floor(Date.now() / 1000)
@@ -54,6 +57,9 @@ export const verifySupabaseToken = async (token) => {
   if (!secretValue) {
     throw new Error('AUTH_JWT_SECRET is not set')
   }
+  // DEBUG: Fingerprint the secret during verify
+  console.log(`[Auth Debug] Verifying Token. Secret Fingerprint: Len=${secretValue.length}, Start="${secretValue.slice(0, 3)}..."`);
+
   const secret = new TextEncoder().encode(secretValue)
   const { payload } = await jwtVerify(token, secret, {
     algorithms: ['HS256'],
