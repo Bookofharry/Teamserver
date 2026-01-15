@@ -7,6 +7,7 @@ const getJwtAudience = () => (process.env.AUTH_JWT_AUDIENCE || 'teampad').trim()
 export const getAuthTokenTtlSeconds = () =>
   Number.parseInt(process.env.AUTH_JWT_TTL_SECONDS || String(60 * 60 * 24 * 7), 10)
 const resolveAuthCookieName = () => (process.env.AUTH_COOKIE_NAME || 'teampad_session').trim()
+
 const parseCookies = (cookieHeader = '') =>
   cookieHeader.split(';').reduce((acc, part) => {
     const trimmed = part.trim()
@@ -18,6 +19,7 @@ const parseCookies = (cookieHeader = '') =>
     acc[key] = decodeURIComponent(value)
     return acc
   }, {})
+
 const getAuthToken = (req) => {
   const cookieHeader = req.headers.cookie || ''
   const cookies = parseCookies(cookieHeader)
@@ -35,8 +37,6 @@ export const createAuthToken = async ({ userId, email, role = 'authenticated', n
   if (!secretValue) {
     throw new Error('AUTH_JWT_SECRET is not set')
   }
-  // DEBUG: Fingerprint the secret for consistency check
-  console.log(`[Auth Debug] Signing Token. Secret Fingerprint: Len=${secretValue.length}, Start="${secretValue.slice(0, 3)}..."`);
 
   const ttlSeconds = getAuthTokenTtlSeconds()
   const payload = { email, role, name }
@@ -60,8 +60,6 @@ export const verifySupabaseToken = async (token) => {
   if (!secretValue) {
     throw new Error('AUTH_JWT_SECRET is not set')
   }
-  // DEBUG: Fingerprint the secret during verify
-  console.log(`[Auth Debug] Verifying Token. Secret Fingerprint: Len=${secretValue.length}, Start="${secretValue.slice(0, 3)}..."`);
 
   return new Promise((resolve, reject) => {
     jwt.verify(token, secretValue, {
@@ -94,18 +92,19 @@ export const buildAuthCookieOptions = (payload) => {
 
   let domain = process.env.AUTH_COOKIE_DOMAIN
 
-  // Ignore domain config on Vercel (Prod/Preview/Dev) to support Rewrite/Proxy setups.
-  // When proxied, the cookie must be HostOnly (matching the frontend domain), 
-  // so setting it to the backend domain explicitly would cause rejection.
+  // Ignore domain config on Vercel to support Rewrite/Proxy setups.
+  // When proxied, the cookie must be HostOnly (matching the frontend domain).
+
   if (isVercel) {
     domain = undefined
   }
 
+  // If domain is explicitly set (e.g. for custom domains), strip protocol
   if (domain) {
     domain = domain.replace(/^https?:\/\//, '').split(':')[0]
   }
 
-  // Handle 'exp' from payload (which is seconds since epoch for JWT)
+  // Handle 'exp' from payload (JWT expiration)
   let maxAge = undefined;
   if (payload?.exp) {
     const msRemaining = payload.exp * 1000 - Date.now();
@@ -113,18 +112,6 @@ export const buildAuthCookieOptions = (payload) => {
       maxAge = msRemaining;
     }
   }
-
-  // If no exp in payload, use default TTL for cookie
-  /*
-  const options = {
-    httpOnly: true,
-    secure,
-    sameSite,
-    path: '/',
-    ...(domain ? { domain } : {}),
-  }
-  if (maxAge) options.maxAge = maxAge;
-  */
 
   return {
     httpOnly: true,
@@ -141,19 +128,15 @@ export const getAuthCookieName = () => resolveAuthCookieName()
 export const requireSupabaseAuth = async (req, res, next) => {
   try {
     const token = getAuthToken(req)
-    console.log(`[Auth Debug] Path: ${req.path} | CookieHeader: ${!!req.headers.cookie} | TokenFound: ${!!token}`);
 
     if (!token) {
+      // Quietly fail for no token (expected during logout/initial load)
       if (process.env.NODE_ENV !== 'production') {
-        logger.warn({
-          method: req.method,
-          path: req.path,
-          headers: req.headers
-        }, '[DEBUG] Auth missing token - responding 401');
+        logger.debug({ path: req.path }, 'Auth missing token')
       }
-      console.log(`[DEBUG] requireSupabaseAuth FAILED for ${req.path}. No token found.`);
       return res.status(401).json({ error: { code: 'unauthorized', message: 'Unauthorized' } })
     }
+
     const payload = await verifySupabaseToken(token)
     req.auth = {
       userId: payload.sub,
@@ -164,14 +147,16 @@ export const requireSupabaseAuth = async (req, res, next) => {
     }
     return next()
   } catch (error) {
-    console.error(`[Auth Debug] Verification Failed: ${error.message}`, error);
+    // Standard error logging
     if (process.env.NODE_ENV !== 'production') {
       logger.warn({ name: error?.name, message: error?.message }, 'Auth token verification failed')
     }
-    const details =
-      process.env.NODE_ENV !== 'production' ? { details: error?.message || 'Auth failed' } : {}
-    return res
-      .status(401)
-      .json({ error: { code: 'unauthorized', message: 'Invalid or expired token', ...details } })
+    return res.status(401).json({
+      error: {
+        code: 'unauthorized',
+        message: 'Invalid or expired token',
+        details: process.env.NODE_ENV !== 'production' ? error.message : undefined
+      }
+    })
   }
 }
