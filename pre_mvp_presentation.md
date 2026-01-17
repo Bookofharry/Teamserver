@@ -1,4 +1,4 @@
-# TeamPad Pre-MVP Presentation (v1.8)
+# TeamPad Pre-MVP Presentation (v1.10)
 
 ## Slide Guide (12 slides)
 1) Title + one-liner
@@ -34,78 +34,54 @@ Teams lose context across chat threads and scattered docs. Notes get buried, own
 ## 4) Solution
 TeamPad provides structured workspaces, collections, notes, and realtime workspace chat with controlled access, fast search, and a frictionless invite flow.
 
-## 5) Product Tour (Core Flows)
-- Visit marketing home (`/`) -> click Open App.
-- Auth on `/auth` (signup or login).
-- Redirect to `/app` (dashboard).
-- Create or select workspace -> create group -> create note.
-- Invite members via email -> accept invite via `/invite/:token`.
-- Use workspace chat for realtime updates and mentions.
-- **Voice Notes**: Send a "Walkie-Talkie" audio message.
-- **Team Pulse**: Set your daily status and vibe.
+## 5) Product Tour (Core Flow)
+**MVP hypothesis:** Teams will prefer capturing decisions in the same place they chat, instead of splitting Slack + docs.
 
-## 6) Workspace Chat
-- Realtime per workspace (Ably).
+Flow:
+- A decision happens in chat.
+- It becomes a note in the same workspace.
+- The note stays searchable and shareable for the team.
+
+## 6) Workspace Chat (MVP Core)
 - Realtime per workspace (Ably).
 - Mentions, reactions, and image uploads.
-- **Voice Notes**: Modern, WhatsApp-style audio player.
 - Unread + mention counters.
-- Message retention by plan (free 1k, premium 3k, premium+ 10k).
 
-## 7) Notes + Version History
+## 7) Notes (MVP Core)
 - Create, edit, save, delete.
 - Pin/unpin, tags, quick preview.
 - Save status + explicit Save button.
-- Version history UI + restore flow (plan-limited).
-- Version history UI + restore flow (plan-limited).
 - Attachments stored in Supabase storage.
-- **Focus Mode**: Zen mode to hide UI and focus on writing.
 
 ## 8) Security + Trust
-- JWT auth for all private API routes.
+- Session cookie auth for private API routes (optional bearer token supported).
 - Server uses Supabase service role (RLS enabled in DB).
 - Role checks on invite/members/actions.
 - Invite acceptance requires matching email.
-- CSRF protections for session-bound endpoints.
 
 ## 9) Plans + Limits (Draft)
-**Free**
-- 1 workspace, 5 collections, 8 notes per collection.
-- Plain text editor only.
-- Version history: 3 latest.
-- Chat retention: 1,000 messages.
-
-**Premium ($15/mo)**
-- 3 workspaces, 20 collections, 200 notes per collection.
-- Rich formatting tools.
-- Version history: 10 latest.
-- Chat retention: 3,000 messages.
-
-**Premium+ ($25/mo)**
-- Unlimited workspaces/collections/notes.
-- TeamPad AI, public notes, audit trail.
-- Version history: 20 latest.
-- Chat retention: 10,000 messages.
+- Free for small teams.
+- Paid tiers when teams scale.
+- Pricing/limits will be validated after MVP usage data.
 
 ## 10) MVP Scope + What’s Next
-**Included**
+**Included (MVP Core)**
 - Auth, workspaces, collections, notes, invites.
-- Search, pinning, version history UI.
-- Search, pinning, version history UI.
-- Workspace chat (realtime, mentions, reactions, **Voice Notes**).
-- **Team Pulse** & **Focus Mode**.
-- Theme + settings.
+- Search and basic organization (pinning, tags).
+- Workspace chat (realtime, mentions, reactions).
 
 **Next**
 1) Invite acceptance UX polish + email deliverability hardening  
 2) Workspace billing + subscription handling  
 3) Chat moderation UX + mention notifications UI  
 4) Real-time co-editing  
+5) Differentiators: voice notes, Team Pulse, focus mode, public notes, AI
 
 ## 11) Risks + Mitigations
 - SMTP reliability -> multiple SMTP options + failover checklist.
 - Chat delivery -> Ably keys + storage policies checklist.
-- Mobile UX -> fixed breakpoints + targeted QA list.
+- Positioning risk -> prove “chat + notes together” beats Slack + docs.
+- Behavior risk -> ensure notes are created from chat context, not passive storage.
 
 ## 11.1) MVP Success Metrics (30 Days)
 - Activation: 70% of invited users create or edit a note.
@@ -124,7 +100,7 @@ TeamPad provides structured workspaces, collections, notes, and realtime workspa
 - Product, operations, and marketing teams that need shared notes
 - Founders who need a fast, structured knowledge hub
 
-## Current Product Scope (v1.7)
+## Current Product Scope (Private Beta v1.9)
 
 ### Core User Flows
 - Visit marketing home (`/`) -> click Open App.
@@ -134,7 +110,7 @@ TeamPad provides structured workspaces, collections, notes, and realtime workspa
 - Invite members via email -> accept invite via `/invite/:token`.
 - Use workspace chat for realtime updates and mentions.
 
-### Features Implemented
+### Built (Not All MVP-Critical)
 **Workspaces**
 - Create, rename, delete (owner only).
 - Role-based access: owner/admin/member.
@@ -160,6 +136,7 @@ TeamPad provides structured workspaces, collections, notes, and realtime workspa
 - Save status + explicit Save button.
 - Version history UI + restore flow (plan-limited).
 - Attachments (upload/download) stored in Supabase storage.
+- Public notes (shareable link with expiry).
 
 **Workspace Chat**
 - Realtime per workspace (Ably).
@@ -170,7 +147,7 @@ TeamPad provides structured workspaces, collections, notes, and realtime workspa
 
 **Unique "Better than Notion" Features**
 - **Focus Mode**: "Zen" mode toggle for distraction-free writing.
-- **Team Pulse**: User status and emoji presence system.
+- **Team Pulse**: User status and emoji presence system (surfaced in sidebar).
 
 **Search**
 - Workspace-wide search; when query is present, results span all groups.
@@ -180,10 +157,12 @@ TeamPad provides structured workspaces, collections, notes, and realtime workspa
 - Default group + time format preferences.
 - Profile update (avatar; name locked with support prompt).
 - Reset password trigger (custom auth flow).
+- AI provider preference (server default, mock, gemini).
 
 **AI Panel (Mock)**
 - AI actions panel in the note editor (summary/actions/title).
-- Currently mocked responses (placeholder for future AI integration).
+- Streaming answers with server-side provider (mock or Gemini).
+- Provider selection preference stored client-side (server may override).
 
 **Branding + UI**
 - TeamPad logo and branded marketing site.
@@ -201,7 +180,7 @@ TeamPad provides structured workspaces, collections, notes, and realtime workspa
 
 **Backend**
 - Node.js + Express
-- Supabase Admin SDK + JWT validation
+- Supabase Admin SDK + session cookie auth
 - REST API at `/v1` and `/api`
 - SMTP email delivery (Nodemailer)
 
@@ -219,7 +198,7 @@ Main tables:
 - `workspace_messages` + chat tables
 
 ## Security + Access Rules (Now)
-- JWT auth for all private API routes.
+- Session cookie auth for all private API routes (optional bearer token supported).
 - Server uses Supabase service role (RLS enabled in DB).
 - Role checks on invite/members/actions.
 - Invite acceptance requires matching email.
@@ -284,4 +263,4 @@ Main tables:
 4) Real-time co-editing  
 
 ## Current Version
-**TeamPad v1.8** (pre-MVP baseline)
+**TeamPad v1.9** (private beta baseline)
