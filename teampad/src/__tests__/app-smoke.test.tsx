@@ -67,6 +67,7 @@ describe("TeamPad smoke tests", () => {
   it("allows switching themes from the user menu", async () => {
     const user = userEvent.setup();
     localStorage.clear();
+    localStorage.setItem("teampad-notes-collapsed-state", "false");
     renderWithProviders(<Dashboard />);
 
     await screen.findByText("Collections");
@@ -82,6 +83,7 @@ describe("TeamPad smoke tests", () => {
   });
 
   it("renders sidebar navigation", async () => {
+    localStorage.setItem("teampad-notes-collapsed-state", "false");
     renderWithProviders(<Dashboard />);
 
     expect(await screen.findByText("Collections")).toBeInTheDocument();

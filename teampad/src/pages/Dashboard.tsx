@@ -393,6 +393,7 @@ export default function Dashboard() {
   }, [currentGroupId, notes, setCurrentNoteId]);
 
   const plan: PlanTier = me?.plan ?? (me?.isSubscribed ? 'premium' : 'free');
+  const shouldShowFocusToggle = !isMobile || (!showChatPanel && !noteModalOpen);
   const isPremiumPlus = plan === 'premium_plus';
   const planLimits = {
     free: { workspaces: 1, groups: 5, notes: 8 },
@@ -841,7 +842,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="h-screen flex overflow-hidden bg-background dashboard-sans">
+    <div className="min-h-[100dvh] flex overflow-hidden bg-background dashboard-sans">
       {!isFocusMode && (
         <Suspense fallback={sidebarFallback}>
           <LazyWorkspaceSidebar
@@ -856,6 +857,8 @@ export default function Dashboard() {
             isGroupsLoading={groupsLoading}
             isGroupsError={isGroupsError}
             groupsErrorMessage={groupsErrorMessage}
+            members={members}
+            currentUserId={me?.id ?? null}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             currentGroupId={currentGroupId}
@@ -1025,13 +1028,15 @@ export default function Dashboard() {
           />
         </Suspense>
       )}
-      <button
-        onClick={() => setIsFocusMode(!isFocusMode)}
-        className="fixed bottom-6 right-6 z-50 p-3 rounded-full bg-primary/90 text-primary-foreground shadow-lg hover:bg-primary transition-all hover:scale-105"
-        title={isFocusMode ? "Exit Focus Mode" : "Enter Focus Mode"}
-      >
-        {isFocusMode ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
-      </button>
+      {shouldShowFocusToggle && (
+        <button
+          onClick={() => setIsFocusMode(!isFocusMode)}
+          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 p-3 rounded-full bg-primary/90 text-primary-foreground shadow-lg hover:bg-primary transition-all hover:scale-105"
+          title={isFocusMode ? "Exit Focus Mode" : "Enter Focus Mode"}
+        >
+          {isFocusMode ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+        </button>
+      )}
     </div>
   );
 }

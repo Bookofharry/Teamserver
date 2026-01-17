@@ -21,12 +21,12 @@ export function WorkspaceSidebar({
   if (isMobile) {
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="left" className="p-0">
+        <SheetContent side="left" className="p-0 w-[88vw] max-w-[360px]">
           <SheetHeader className="sr-only">
             <SheetTitle>Workspace navigation</SheetTitle>
             <SheetDescription>Navigate workspaces, collections, and settings.</SheetDescription>
           </SheetHeader>
-          <Sidebar {...sidebarProps} />
+          <Sidebar {...sidebarProps} className="w-full max-w-none" />
         </SheetContent>
       </Sheet>
     );

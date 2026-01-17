@@ -1,13 +1,14 @@
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, Plus, FolderOpen, Settings, Search, Users, LogOut, X, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Plus, FolderOpen, Settings, Search, Users, LogOut, X, Trash2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
-import type { Workspace, Group } from '@/types';
+import { cn, getUserColor } from '@/lib/utils';
+import type { Workspace, Group, WorkspaceMember } from '@/types';
 
 interface SidebarProps {
+  className?: string;
   workspaces: Workspace[];
   currentWorkspace: Workspace;
   groups: Group[];
@@ -32,9 +33,12 @@ interface SidebarProps {
   isCreateWorkspaceLocked?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  members?: WorkspaceMember[];
+  currentUserId?: string | null;
 }
 
 export function Sidebar({
+  className,
   workspaces,
   currentWorkspace,
   groups,
@@ -59,6 +63,8 @@ export function Sidebar({
   isCreateWorkspaceLocked,
   collapsed = false,
   onToggleCollapse,
+  members = [],
+  currentUserId = null,
 }: SidebarProps) {
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [showWorkspaceName, setShowWorkspaceName] = useState(!collapsed);
@@ -101,6 +107,9 @@ export function Sidebar({
   }, [collapsed]);
 
   const workspaceGroups = groups.filter(g => g.workspaceId === currentWorkspace.id);
+  const pulseMembers = members
+    .filter((member) => member.user?.status || member.user?.statusEmoji)
+    .slice(0, 4);
   const showLabels = !collapsed;
   const workspaceInitial = currentWorkspace.name.trim().charAt(0) || 'W';
 
@@ -109,6 +118,7 @@ export function Sidebar({
       className={cn(
         "h-[100dvh] bg-sidebar flex flex-col transition-[width] duration-200",
         collapsed ? "w-16" : "w-64",
+        className,
       )}
     >
       <div className={cn("px-4 pt-4 pb-5", collapsed && "px-3")}>
@@ -344,6 +354,45 @@ export function Sidebar({
             ))}
         </nav>
       </div>
+
+      {showLabels && pulseMembers.length > 0 && (
+        <div className="px-4 pb-2">
+          <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.25em] text-muted-foreground">
+            <span>Team Pulse</span>
+            <Sparkles className="h-3 w-3" aria-hidden="true" />
+          </div>
+          <div className="mt-2 space-y-2">
+            {pulseMembers.map((member) => {
+              const name = member.user?.name || "Member";
+              const initial = name.trim().charAt(0).toUpperCase() || "M";
+              const statusEmoji = member.user?.statusEmoji || "";
+              const statusText = member.user?.status || "";
+              const isYou = currentUserId && member.userId === currentUserId;
+              return (
+                <div key={member.id} className="flex items-center gap-3 rounded-xl bg-muted/40 px-3 py-2">
+                  <div className={cn("h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-semibold", getUserColor(name))}>
+                    {initial}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-foreground truncate">
+                      {name}{isYou ? " (you)" : ""}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      {statusEmoji} {statusText}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+            <button
+              onClick={onOpenMembers}
+              className="w-full rounded-xl border border-border/70 bg-background/70 px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted/60 transition-colors"
+            >
+              Set your status
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Bottom Actions */}
       <div className="p-4 space-y-1">

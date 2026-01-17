@@ -64,6 +64,7 @@ export function SettingsDrawer({
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [inviteAction, setInviteAction] = useState<null | { token: string; type: 'accept' | 'decline' }>(null);
   const [planModalOpen, setPlanModalOpen] = useState(false);
+  const [aiProvider, setAiProvider] = useState<'server' | 'mock' | 'gemini'>('server');
 
   const handleWorkspaceNameChange = (value: string) => {
     const cleaned = value.replace(/[^A-Za-z ]/g, '').slice(0, 15);
@@ -73,6 +74,7 @@ export function SettingsDrawer({
   const themeKey = `teampad-theme:${user.id}`;
   const timeKey = `teampad-time-format:${user.id}`;
   const groupKey = `teampad-default-group:${workspace.id}`;
+  const aiProviderKey = "teampad-ai-provider";
 
   const {
     data: invites = [],
@@ -101,6 +103,16 @@ export function SettingsDrawer({
     const storedGroup = localStorage.getItem(groupKey);
     setDefaultGroup(storedGroup ?? '');
   }, [groupKey, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const storedProvider = localStorage.getItem(aiProviderKey);
+    if (storedProvider === 'mock' || storedProvider === 'gemini' || storedProvider === 'server') {
+      setAiProvider(storedProvider);
+    } else {
+      setAiProvider('server');
+    }
+  }, [open, aiProviderKey]);
 
   const hasProfileChanges = name.trim() !== user.name || avatar !== (user.avatar ?? '');
   const hasWorkspaceChanges = workspaceName.trim() !== workspace.name;
@@ -286,6 +298,15 @@ export function SettingsDrawer({
   const handleDefaultGroup = (value: string) => {
     setDefaultGroup(value);
     localStorage.setItem(groupKey, value);
+  };
+
+  const handleAiProvider = (value: 'server' | 'mock' | 'gemini') => {
+    setAiProvider(value);
+    localStorage.setItem(aiProviderKey, value);
+    toast({
+      title: 'AI provider preference updated',
+      description: 'TeamPad will send this preference with AI requests.',
+    });
   };
 
   return (
@@ -554,6 +575,22 @@ export function SettingsDrawer({
                     </Select>
                     <p className="text-xs text-muted-foreground">
                       Used when creating new notes in this workspace.
+                    </p>
+                  </div>
+                  <div className="space-y-2 rounded-xl border border-border/60 bg-muted/30 p-3 sm:col-span-2">
+                    <Label>AI provider</Label>
+                    <Select value={aiProvider} onValueChange={(value) => handleAiProvider(value as 'server' | 'mock' | 'gemini')}>
+                      <SelectTrigger className="bg-background/70">
+                        <SelectValue placeholder="Choose provider" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="server">Server default</SelectItem>
+                        <SelectItem value="mock">Mock</SelectItem>
+                        <SelectItem value="gemini">Gemini</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Preference only. The server may override based on environment config.
                     </p>
                   </div>
                 </div>

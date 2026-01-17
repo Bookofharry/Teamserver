@@ -682,6 +682,12 @@ export function ChatPanel({
   );
   const showRealtimeBanner =
     ablyEnabled && (realtimeStatus === "unavailable" || showConnectingBanner);
+  const retentionLimit = useMemo(() => {
+    const plan = currentUser?.plan;
+    if (plan === "premium_plus") return 10000;
+    if (plan === "premium") return 3000;
+    return 1000;
+  }, [currentUser?.plan]);
 
   useEffect(() => {
     if (!ablyEnabled || realtimeStatus !== "connecting") {
@@ -1346,6 +1352,9 @@ export function ChatPanel({
           </div>
           <p className="text-[11px] text-muted-foreground mt-2 px-1">
             Mentions highlight and notify immediately.
+          </p>
+          <p className="text-[11px] text-muted-foreground px-1">
+            Retention: last {retentionLimit.toLocaleString()} messages.
           </p>
           {errorMessage && (
             <p className="text-xs text-destructive mt-1 px-1">{errorMessage}</p>

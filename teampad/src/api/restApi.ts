@@ -709,11 +709,14 @@ export const restApi = {
       cachedCsrfToken = cookieToken;
     }
     const csrfToken = cookieToken || cachedCsrfToken;
+    const aiProvider =
+      typeof window !== "undefined" ? window.localStorage.getItem("teampad-ai-provider") : null;
 
     fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(aiProvider && aiProvider !== "server" ? { "X-AI-Provider": aiProvider } : {}),
         ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
       },
       credentials: 'include',
