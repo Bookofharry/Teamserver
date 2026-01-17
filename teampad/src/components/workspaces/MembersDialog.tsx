@@ -228,6 +228,8 @@ export function MembersDialog({
                   {!isLoading &&
                     sortedMembers.map((member) => {
                       const isYou = me?.id && member.userId === me.id;
+                      const displayStatus = member.user.status ?? (isYou ? me?.status : null);
+                      const displayStatusEmoji = member.user.statusEmoji ?? (isYou ? me?.statusEmoji : null);
                       const canRemove =
                         currentRole === 'owner'
                           ? !isYou && (member.role !== 'owner' || ownerCount > 1)
@@ -246,11 +248,11 @@ export function MembersDialog({
                             </p>
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
                               {member.user.email}
-                              {(member.user.status || member.user.statusEmoji) && (
+                              {(displayStatus || displayStatusEmoji) && (
                                 <>
                                   <span className="mx-1">·</span>
                                   <span className="text-foreground">
-                                    {member.user.statusEmoji} {member.user.status}
+                                    {displayStatusEmoji} {displayStatus}
                                   </span>
                                 </>
                               )}

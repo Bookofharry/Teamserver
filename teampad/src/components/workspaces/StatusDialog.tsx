@@ -54,7 +54,9 @@ export function StatusDialog({ open, onOpenChange, user, workspaceId }: StatusDi
                 : member,
             ),
         );
+        queryClient.invalidateQueries({ queryKey: ['workspace-members', workspaceId] });
       }
+      queryClient.invalidateQueries({ queryKey: ['me'] });
       onOpenChange(false);
       toast({ title: 'Status updated', description: 'Your vibe has been shared.' });
     } catch (error) {

@@ -36,6 +36,7 @@ interface SidebarProps {
   onToggleCollapse?: () => void;
   members?: WorkspaceMember[];
   currentUserId?: string | null;
+  currentUser?: WorkspaceMember["user"] | null;
 }
 
 export function Sidebar({
@@ -67,6 +68,7 @@ export function Sidebar({
   onToggleCollapse,
   members = [],
   currentUserId = null,
+  currentUser = null,
 }: SidebarProps) {
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [showWorkspaceName, setShowWorkspaceName] = useState(!collapsed);
@@ -112,6 +114,19 @@ export function Sidebar({
   const pulseMembers = members
     .filter((member) => member.user?.status || member.user?.statusEmoji)
     .slice(0, 4);
+  const shouldUseFallback =
+    !pulseMembers.length && Boolean(currentUser?.status || currentUser?.statusEmoji);
+  const fallbackPulse =
+    shouldUseFallback
+      ? [
+          {
+            id: "self-status",
+            userId: currentUserId ?? "me",
+            user: currentUser,
+          } as WorkspaceMember,
+        ]
+      : [];
+  const pulseList = pulseMembers.length ? pulseMembers : fallbackPulse;
   const showLabels = !collapsed;
   const workspaceInitial = currentWorkspace.name.trim().charAt(0) || 'W';
 
@@ -364,8 +379,8 @@ export function Sidebar({
             <Sparkles className="h-3 w-3" aria-hidden="true" />
           </div>
           <div className="mt-2 space-y-2">
-            {pulseMembers.length > 0 ? (
-              pulseMembers.map((member) => {
+            {pulseList.length > 0 ? (
+              pulseList.map((member) => {
                 const name = member.user?.name || "Member";
                 const initial = name.trim().charAt(0).toUpperCase() || "M";
                 const statusEmoji = member.user?.statusEmoji || "";

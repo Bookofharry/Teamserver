@@ -868,6 +868,7 @@ export default function Dashboard() {
             groupsErrorMessage={groupsErrorMessage}
             members={members}
             currentUserId={me?.id ?? null}
+            currentUser={me ?? null}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             currentGroupId={currentGroupId}
