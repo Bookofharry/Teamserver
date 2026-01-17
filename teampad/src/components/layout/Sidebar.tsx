@@ -37,6 +37,7 @@ interface SidebarProps {
   members?: WorkspaceMember[];
   currentUserId?: string | null;
   currentUser?: WorkspaceMember["user"] | null;
+  currentUserLoading?: boolean;
 }
 
 export function Sidebar({
@@ -69,6 +70,7 @@ export function Sidebar({
   members = [],
   currentUserId = null,
   currentUser = null,
+  currentUserLoading = false,
 }: SidebarProps) {
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [showWorkspaceName, setShowWorkspaceName] = useState(!collapsed);
@@ -112,21 +114,8 @@ export function Sidebar({
 
   const workspaceGroups = groups.filter(g => g.workspaceId === currentWorkspace.id);
   const pulseMembers = members
-    .filter((member) => member.user?.status)
-    .slice(0, 4);
-  const shouldUseFallback =
-    !pulseMembers.length && Boolean(currentUser?.status);
-  const fallbackPulse =
-    shouldUseFallback
-      ? [
-          {
-            id: "self-status",
-            userId: currentUserId ?? "me",
-            user: currentUser,
-          } as WorkspaceMember,
-        ]
-      : [];
-  const pulseList = pulseMembers.length ? pulseMembers : fallbackPulse;
+    .filter((member) => member.user?.status && member.userId !== currentUserId)
+    .slice(0, 3);
   const showLabels = !collapsed;
   const workspaceInitial = currentWorkspace.name.trim().charAt(0) || 'W';
 
@@ -379,32 +368,50 @@ export function Sidebar({
             <Sparkles className="h-3 w-3" aria-hidden="true" />
           </div>
           <div className="mt-2 space-y-2">
-            {pulseList.length > 0 ? (
-              pulseList.map((member) => {
-                const name = member.user?.name || "Member";
-                const initial = name.trim().charAt(0).toUpperCase() || "M";
-                const statusText = member.user?.status || "";
-                const isYou = currentUserId && member.userId === currentUserId;
-                return (
-                  <div key={member.id} className="flex items-center gap-3 rounded-xl bg-muted/40 px-3 py-2">
-                    <div className={cn("h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-semibold", getUserColor(name))}>
-                      {initial}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-foreground truncate">
-                        {name}{isYou ? " (you)" : ""}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground truncate">
-                        {statusText}
-                      </p>
-                    </div>
+            {currentUserLoading ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-3 rounded-xl bg-muted/40 px-3 py-2">
+                  <Skeleton className="h-7 w-7 rounded-full" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-3 w-40" />
                   </div>
-                );
-              })
+                </div>
+              </div>
             ) : (
-              <p className="text-[11px] text-muted-foreground">
-                No statuses yet. Set yours to kick it off.
-              </p>
+              <div className="flex items-center gap-3 rounded-xl bg-muted/40 px-3 py-2">
+                <div className={cn("h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-semibold", getUserColor(currentUser?.name || "Me"))}>
+                  {(currentUser?.name || "Me").trim().charAt(0).toUpperCase() || "M"}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold text-foreground truncate">
+                    {currentUser?.name || "You"}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground truncate">
+                    {currentUser?.status || "Set your status"}
+                  </p>
+                </div>
+              </div>
+            )}
+            {pulseMembers.length > 0 && (
+              <div className="space-y-2">
+                {pulseMembers.map((member) => {
+                  const name = member.user?.name || "Member";
+                  const initial = name.trim().charAt(0).toUpperCase() || "M";
+                  const statusText = member.user?.status || "";
+                  return (
+                    <div key={member.id} className="flex items-center gap-3 rounded-xl bg-muted/40 px-3 py-2">
+                      <div className={cn("h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-semibold", getUserColor(name))}>
+                        {initial}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-foreground truncate">{name}</p>
+                        <p className="text-[11px] text-muted-foreground truncate">{statusText}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
             <button
               onClick={onOpenStatus ?? onOpenMembers}

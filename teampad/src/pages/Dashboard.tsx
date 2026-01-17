@@ -103,6 +103,7 @@ export default function Dashboard() {
     isMobile,
     isTablet,
     me,
+    meLoading,
     currentWorkspaceId,
     setCurrentWorkspaceId,
     currentGroupId,
@@ -869,6 +870,7 @@ export default function Dashboard() {
             members={members}
             currentUserId={me?.id ?? null}
             currentUser={me ?? null}
+            currentUserLoading={meLoading}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             currentGroupId={currentGroupId}

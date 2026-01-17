@@ -60,7 +60,7 @@ export function useDashboardState() {
     refetch: refetchGroups,
   } = useGroups(currentWorkspaceId);
 
-  const { data: me } = useMe();
+  const { data: me, isLoading: meLoading } = useMe();
   const createWorkspace = useCreateWorkspace();
   const deleteWorkspace = useDeleteWorkspace();
   const updateProfile = useUpdateProfile();
@@ -158,6 +158,7 @@ export function useDashboardState() {
     isMobile,
     isTablet,
     me,
+    meLoading,
 
     currentWorkspaceId,
     setCurrentWorkspaceId,
