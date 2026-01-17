@@ -43,6 +43,10 @@ export const useMe = (enabled = true) =>
     queryKey: ["me"],
     queryFn: () => api.getMe(),
     enabled,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
 export const useUpdateProfile = () => {
@@ -117,8 +121,11 @@ export const useWorkspaceMembers = (workspaceId: string | null, enabled = true) 
     queryKey: ["workspace-members", workspaceId],
     queryFn: () => api.listWorkspaceMembers(workspaceId as string),
     enabled: Boolean(workspaceId && enabled),
-    refetchInterval: enabled ? 20000 : false,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: "always",
     refetchOnWindowFocus: true,
+    refetchInterval: enabled ? 15000 : false,
   });
 
 export const useWorkspaceInvites = (workspaceId: string | null, enabled = true) =>

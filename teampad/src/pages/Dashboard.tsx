@@ -421,7 +421,11 @@ export default function Dashboard() {
   const groupLimitLabel = activeLimits ? String(activeLimits.groups) : 'Unlimited';
   const noteLimitLabel = activeLimits ? String(activeLimits.notes) : 'Unlimited';
 
-  const { data: members = [] } = useWorkspaceMembers(currentWorkspaceId, Boolean(currentWorkspaceId));
+  const {
+    data: members = [],
+    isLoading: membersLoading,
+    isFetching: membersFetching,
+  } = useWorkspaceMembers(currentWorkspaceId, Boolean(currentWorkspaceId));
   const currentMember = members.find((member) => member.userId === (me?.id ?? ''));
   const canManageWorkspace = currentMember?.role === 'owner' || currentMember?.role === 'admin';
   const isWorkspaceOwner = currentMember?.role === 'owner';
@@ -868,6 +872,7 @@ export default function Dashboard() {
             isGroupsError={isGroupsError}
             groupsErrorMessage={groupsErrorMessage}
             members={members}
+            membersLoading={membersLoading || membersFetching}
             currentUserId={me?.id ?? null}
             currentUser={me ?? null}
             currentUserLoading={meLoading}

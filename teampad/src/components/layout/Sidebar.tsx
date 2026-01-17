@@ -35,6 +35,7 @@ interface SidebarProps {
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   members?: WorkspaceMember[];
+  membersLoading?: boolean;
   currentUserId?: string | null;
   currentUser?: WorkspaceMember["user"] | null;
   currentUserLoading?: boolean;
@@ -68,6 +69,7 @@ export function Sidebar({
   collapsed = false,
   onToggleCollapse,
   members = [],
+  membersLoading = false,
   currentUserId = null,
   currentUser = null,
   currentUserLoading = false,
@@ -393,7 +395,24 @@ export function Sidebar({
                 </div>
               </div>
             )}
-            {pulseMembers.length > 0 && (
+            {membersLoading ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-3 rounded-xl bg-muted/40 px-3 py-2">
+                  <Skeleton className="h-7 w-7 rounded-full" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-3 w-28" />
+                    <Skeleton className="h-3 w-36" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 rounded-xl bg-muted/40 px-3 py-2">
+                  <Skeleton className="h-7 w-7 rounded-full" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
+                </div>
+              </div>
+            ) : pulseMembers.length > 0 ? (
               <div className="space-y-2">
                 {pulseMembers.map((member) => {
                   const name = member.user?.name || "Member";
@@ -412,6 +431,10 @@ export function Sidebar({
                   );
                 })}
               </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                No other statuses yet.
+              </p>
             )}
             <button
               onClick={onOpenStatus ?? onOpenMembers}
