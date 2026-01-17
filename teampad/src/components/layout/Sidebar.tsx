@@ -357,35 +357,41 @@ export function Sidebar({
         </nav>
       </div>
 
-      {showLabels && pulseMembers.length > 0 && (
+      {showLabels && (
         <div className="px-4 pb-2">
           <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.25em] text-muted-foreground">
             <span>Team Pulse</span>
             <Sparkles className="h-3 w-3" aria-hidden="true" />
           </div>
           <div className="mt-2 space-y-2">
-            {pulseMembers.map((member) => {
-              const name = member.user?.name || "Member";
-              const initial = name.trim().charAt(0).toUpperCase() || "M";
-              const statusEmoji = member.user?.statusEmoji || "";
-              const statusText = member.user?.status || "";
-              const isYou = currentUserId && member.userId === currentUserId;
-              return (
-                <div key={member.id} className="flex items-center gap-3 rounded-xl bg-muted/40 px-3 py-2">
-                  <div className={cn("h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-semibold", getUserColor(name))}>
-                    {initial}
+            {pulseMembers.length > 0 ? (
+              pulseMembers.map((member) => {
+                const name = member.user?.name || "Member";
+                const initial = name.trim().charAt(0).toUpperCase() || "M";
+                const statusEmoji = member.user?.statusEmoji || "";
+                const statusText = member.user?.status || "";
+                const isYou = currentUserId && member.userId === currentUserId;
+                return (
+                  <div key={member.id} className="flex items-center gap-3 rounded-xl bg-muted/40 px-3 py-2">
+                    <div className={cn("h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-semibold", getUserColor(name))}>
+                      {initial}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-foreground truncate">
+                        {name}{isYou ? " (you)" : ""}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        {statusEmoji} {statusText}
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-foreground truncate">
-                      {name}{isYou ? " (you)" : ""}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground truncate">
-                      {statusEmoji} {statusText}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                No statuses yet. Set yours to kick it off.
+              </p>
+            )}
             <button
               onClick={onOpenStatus ?? onOpenMembers}
               className="w-full rounded-xl border border-border/70 bg-background/70 px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted/60 transition-colors"
