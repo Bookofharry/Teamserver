@@ -92,7 +92,16 @@ export const updateMe = async (req, res) => {
   }
 
   if (input.status !== undefined) {
-    updates.status = input.status || null
+    const nextStatus = input.status || null
+    if (nextStatus) {
+      if (nextStatus.length > 40) {
+        return sendInvalid(res, 'Status must be 40 characters or less')
+      }
+      if (/https?:\/\/|www\./i.test(nextStatus) || /@everyone|@here/i.test(nextStatus)) {
+        return sendInvalid(res, 'Status cannot include links or @everyone/@here')
+      }
+    }
+    updates.status = nextStatus
   }
   if (input.statusEmoji !== undefined) {
     updates.status_emoji = input.statusEmoji || null

@@ -20,22 +20,30 @@ export function StatusDialog({ open, onOpenChange, user, workspaceId }: StatusDi
   const queryClient = useQueryClient();
   const updateProfile = useUpdateProfile();
   const [editStatusText, setEditStatusText] = useState('');
-  const [editStatusEmoji, setEditStatusEmoji] = useState('');
 
   useEffect(() => {
     if (!open) return;
     setEditStatusText(user.status || '');
-    setEditStatusEmoji(user.statusEmoji || '');
-  }, [open, user.status, user.statusEmoji]);
+  }, [open, user.status]);
 
   const handleSaveStatus = async (event: React.FormEvent) => {
     event.preventDefault();
     const nextStatus = editStatusText.trim() || null;
-    const nextEmoji = editStatusEmoji.trim() || null;
+    if (nextStatus) {
+      const hasLink = /https?:\/\/|www\./i.test(nextStatus);
+      const hasGlobalPing = /@everyone|@here/i.test(nextStatus);
+      if (hasLink || hasGlobalPing) {
+        toast({
+          title: 'Status not allowed',
+          description: 'Please avoid links and @everyone/@here in your status.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
     try {
       await updateProfile.mutateAsync({
         status: nextStatus,
-        statusEmoji: nextEmoji,
       });
       if (workspaceId) {
         queryClient.setQueryData<WorkspaceMember[]>(
@@ -48,7 +56,6 @@ export function StatusDialog({ open, onOpenChange, user, workspaceId }: StatusDi
                     user: {
                       ...member.user,
                       status: nextStatus,
-                      statusEmoji: nextEmoji,
                     },
                   }
                 : member,
@@ -78,28 +85,18 @@ export function StatusDialog({ open, onOpenChange, user, workspaceId }: StatusDi
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSaveStatus} className="space-y-4">
-          <div className="grid grid-cols-[60px_1fr] gap-2">
-            <div className="space-y-2">
-              <Label htmlFor="status-emoji">Emoji</Label>
-              <Input
-                id="status-emoji"
-                value={editStatusEmoji}
-                onChange={(e) => setEditStatusEmoji(e.target.value)}
-                placeholder="👋"
-                className="text-center text-lg"
-                maxLength={2}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="status-text">Message</Label>
-              <Input
-                id="status-text"
-                value={editStatusText}
-                onChange={(e) => setEditStatusText(e.target.value)}
-                placeholder="What's your focus today?"
-                maxLength={40}
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="status-text">Status</Label>
+            <Input
+              id="status-text"
+              value={editStatusText}
+              onChange={(e) => setEditStatusText(e.target.value)}
+              placeholder="What's your focus today?"
+              maxLength={40}
+            />
+            <p className="text-xs text-muted-foreground">
+              You can include emojis in the text.
+            </p>
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>

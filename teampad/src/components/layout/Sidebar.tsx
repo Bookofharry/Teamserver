@@ -112,10 +112,10 @@ export function Sidebar({
 
   const workspaceGroups = groups.filter(g => g.workspaceId === currentWorkspace.id);
   const pulseMembers = members
-    .filter((member) => member.user?.status || member.user?.statusEmoji)
+    .filter((member) => member.user?.status)
     .slice(0, 4);
   const shouldUseFallback =
-    !pulseMembers.length && Boolean(currentUser?.status || currentUser?.statusEmoji);
+    !pulseMembers.length && Boolean(currentUser?.status);
   const fallbackPulse =
     shouldUseFallback
       ? [
@@ -383,7 +383,6 @@ export function Sidebar({
               pulseList.map((member) => {
                 const name = member.user?.name || "Member";
                 const initial = name.trim().charAt(0).toUpperCase() || "M";
-                const statusEmoji = member.user?.statusEmoji || "";
                 const statusText = member.user?.status || "";
                 const isYou = currentUserId && member.userId === currentUserId;
                 return (
@@ -396,7 +395,7 @@ export function Sidebar({
                         {name}{isYou ? " (you)" : ""}
                       </p>
                       <p className="text-[11px] text-muted-foreground truncate">
-                        {statusEmoji} {statusText}
+                        {statusText}
                       </p>
                     </div>
                   </div>
