@@ -117,6 +117,8 @@ export const useWorkspaceMembers = (workspaceId: string | null, enabled = true) 
     queryKey: ["workspace-members", workspaceId],
     queryFn: () => api.listWorkspaceMembers(workspaceId as string),
     enabled: Boolean(workspaceId && enabled),
+    refetchInterval: enabled ? 20000 : false,
+    refetchOnWindowFocus: true,
   });
 
 export const useWorkspaceInvites = (workspaceId: string | null, enabled = true) =>

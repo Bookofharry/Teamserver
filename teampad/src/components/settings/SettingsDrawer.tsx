@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useTheme } from 'next-themes';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -55,6 +56,7 @@ export function SettingsDrawer({
 }: SettingsDrawerProps) {
   const { theme, setTheme } = useTheme();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [name, setName] = useState(user.name);
   const [avatar, setAvatar] = useState(user.avatar ?? '');
   const [workspaceName, setWorkspaceName] = useState(workspace.name);
@@ -69,6 +71,11 @@ export function SettingsDrawer({
   const [analyticsDays, setAnalyticsDays] = useState(7);
   const [auditOpen, setAuditOpen] = useState(false);
   const [isSigningOutEverywhere, setIsSigningOutEverywhere] = useState(false);
+  const [twoFactorToken, setTwoFactorToken] = useState<string | null>(null);
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [twoFactorDialogOpen, setTwoFactorDialogOpen] = useState(false);
+  const [twoFactorDisableOpen, setTwoFactorDisableOpen] = useState(false);
+  const [twoFactorBusy, setTwoFactorBusy] = useState(false);
 
   const handleWorkspaceNameChange = (value: string) => {
     const cleaned = value.replace(/[^A-Za-z ]/g, '').slice(0, 15);
@@ -340,6 +347,85 @@ export function SettingsDrawer({
       });
     } finally {
       setIsSigningOutEverywhere(false);
+    }
+  };
+
+  const handleRequestTwoFactor = async () => {
+    if (twoFactorBusy) return;
+    setTwoFactorBusy(true);
+    try {
+      const { token } = await api.requestTwoFactorEnroll();
+      setTwoFactorToken(token);
+      setTwoFactorCode('');
+      setTwoFactorDialogOpen(true);
+    } catch (error) {
+      toast({
+        title: 'Two-factor unavailable',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setTwoFactorBusy(false);
+    }
+  };
+
+  const handleVerifyTwoFactor = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!twoFactorToken || twoFactorBusy) return;
+    setTwoFactorBusy(true);
+    try {
+      await api.verifyTwoFactorEnroll({ token: twoFactorToken, code: twoFactorCode.trim() });
+      setTwoFactorDialogOpen(false);
+      setTwoFactorToken(null);
+      setTwoFactorCode('');
+      queryClient.invalidateQueries({ queryKey: ['me'] });
+      toast({ title: 'Two-factor enabled', description: 'Email codes are now required to sign in.' });
+    } catch (error) {
+      toast({
+        title: 'Verification failed',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setTwoFactorBusy(false);
+    }
+  };
+
+  const handleResendTwoFactor = async () => {
+    if (twoFactorBusy) return;
+    setTwoFactorBusy(true);
+    try {
+      const { token } = await api.requestTwoFactorEnroll();
+      setTwoFactorToken(token);
+      setTwoFactorCode('');
+      toast({ title: 'Code resent', description: 'Check your email for the new code.' });
+    } catch (error) {
+      toast({
+        title: 'Resend failed',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setTwoFactorBusy(false);
+    }
+  };
+
+  const handleDisableTwoFactor = async () => {
+    if (twoFactorBusy) return;
+    setTwoFactorBusy(true);
+    try {
+      await api.disableTwoFactor();
+      setTwoFactorDisableOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['me'] });
+      toast({ title: 'Two-factor disabled', description: 'Sign-in codes are no longer required.' });
+    } catch (error) {
+      toast({
+        title: 'Disable failed',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setTwoFactorBusy(false);
     }
   };
 
@@ -757,9 +843,19 @@ export function SettingsDrawer({
                   <div className="flex items-center justify-between rounded-xl border border-border/70 bg-muted/30 p-3">
                     <div>
                       <p className="text-sm font-medium text-foreground">Two-factor authentication</p>
-                      <p className="text-xs text-muted-foreground">Coming soon for TeamPad Premium.</p>
+                      <p className="text-xs text-muted-foreground">Email verification codes for sign-in.</p>
                     </div>
-                    <Switch disabled />
+                    <Switch
+                      checked={user.twoFactorEnabled}
+                      disabled={twoFactorBusy}
+                      onCheckedChange={() => {
+                        if (user.twoFactorEnabled) {
+                          setTwoFactorDisableOpen(true);
+                        } else {
+                          handleRequestTwoFactor();
+                        }
+                      }}
+                    />
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button variant="outline" onClick={handleResetPassword} disabled={isResettingPassword}>
@@ -788,6 +884,58 @@ export function SettingsDrawer({
             <AlertDialogCancel disabled={isDeletingWorkspace || isDeletingLocal}>Cancel</AlertDialogCancel>
             <AlertDialogAction disabled={isDeletingWorkspace || isDeletingLocal} onClick={handleDeleteWorkspace}>
               {isDeletingWorkspace || isDeletingLocal ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={twoFactorDialogOpen} onOpenChange={setTwoFactorDialogOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Enable two-factor</DialogTitle>
+            <DialogDescription>Enter the 6-digit code sent to your email.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleVerifyTwoFactor} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="two-factor-code">Verification code</Label>
+              <Input
+                id="two-factor-code"
+                value={twoFactorCode}
+                onChange={(event) => setTwoFactorCode(event.target.value)}
+                placeholder="Enter 6-digit code"
+                inputMode="numeric"
+                maxLength={6}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <Button type="button" variant="ghost" onClick={handleResendTwoFactor} disabled={twoFactorBusy}>
+                Resend code
+              </Button>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => setTwoFactorDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={twoFactorBusy || twoFactorCode.trim().length !== 6}>
+                  {twoFactorBusy ? 'Verifying...' : 'Verify & enable'}
+                </Button>
+              </div>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={twoFactorDisableOpen} onOpenChange={setTwoFactorDisableOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disable two-factor?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes email verification for sign-in on this account.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={twoFactorBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={twoFactorBusy} onClick={handleDisableTwoFactor}>
+              {twoFactorBusy ? 'Disabling...' : 'Disable'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

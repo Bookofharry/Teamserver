@@ -13,7 +13,7 @@ import { api } from '@/api';
 import { useAuthStatus } from '@/context/auth-status';
 import { sanitizeEmail } from '@/lib/sanitize';
 
-type AuthView = 'login' | 'signup' | 'otp' | 'forgot-password' | 'reset-password';
+type AuthView = 'login' | 'signup' | 'otp' | 'two-factor' | 'forgot-password' | 'reset-password';
 const SIDEBAR_COLLAPSED_KEY = 'teampad-sidebar-collapsed';
 
 export default function Auth() {
@@ -29,6 +29,7 @@ export default function Auth() {
   const [signUpPassword, setSignUpPassword] = useState('');
   const [signUpName, setSignUpName] = useState('');
   const [signUpExistingAccount, setSignUpExistingAccount] = useState(false);
+  const [twoFactorToken, setTwoFactorToken] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { refresh, markGuest } = useAuthStatus();
@@ -75,8 +76,9 @@ export default function Auth() {
     setIsLoading(true);
     setEmail(email);
 
+    let loginResponse;
     try {
-      await api.login({ email, password });
+      loginResponse = await api.login({ email, password });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Incorrect email or password.';
       setAuthError(message);
@@ -92,6 +94,13 @@ export default function Auth() {
       loginToastTimeout.current = window.setTimeout(() => {
         loginToast.dismiss();
       }, 2400);
+      setIsLoading(false);
+      return;
+    }
+
+    if (loginResponse?.twoFactorRequired && loginResponse.twoFactorToken) {
+      setTwoFactorToken(loginResponse.twoFactorToken);
+      switchView('two-factor');
       setIsLoading(false);
       return;
     }
@@ -192,6 +201,49 @@ export default function Auth() {
     }
   };
 
+  const handleTwoFactorVerify = async (code: string) => {
+    if (!twoFactorToken) return;
+    setAuthError(null);
+    setIsLoading(true);
+    try {
+      await api.verifyTwoFactorLogin({ token: twoFactorToken, code });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Verification failed.';
+      toast({ title: 'Verification failed', description: message });
+      setIsLoading(false);
+      return;
+    }
+    toast({
+      title: 'Signed in!',
+      description: 'Two-factor verification complete.',
+    });
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, 'true');
+    await refresh();
+    navigate(redirectRef.current ?? '/app');
+    setIsLoading(false);
+  };
+
+  const handleTwoFactorResend = async () => {
+    if (!twoFactorToken) return;
+    try {
+      await api.resendTwoFactorLogin({ token: twoFactorToken });
+      toast({
+        title: 'Code resent',
+        description: 'A new code has been sent to your email.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Resend failed',
+        description: error instanceof Error ? error.message : 'Please try again.',
+      });
+    }
+  };
+
+  const handleTwoFactorBack = () => {
+    setTwoFactorToken(null);
+    switchView('login');
+  };
+
   const handleResetPassword = async () => {
     setAuthError(null);
     setIsLoading(true);
@@ -285,6 +337,20 @@ export default function Auth() {
               onVerify={handleOTPVerify}
               onResend={handleResendOTP}
               onBack={() => switchView('login')}
+              isLoading={isLoading}
+            />
+          ),
+        };
+      case 'two-factor':
+        return {
+          title: 'Two-factor verification',
+          subtitle: 'Enter the code we sent to your email',
+          content: (
+            <OTPVerification
+              email={email}
+              onVerify={handleTwoFactorVerify}
+              onResend={handleTwoFactorResend}
+              onBack={handleTwoFactorBack}
               isLoading={isLoading}
             />
           ),

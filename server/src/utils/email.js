@@ -149,6 +149,25 @@ const buildSignupOtpEmail = ({ code }) => {
   return { subject, html, text }
 }
 
+const buildTwoFactorEmail = ({ code }) => {
+  const safeCode = escapeHtml(code)
+  const subject = 'Your TeamPad sign-in code'
+  const html = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111;">
+      <h2 style="margin: 0 0 12px;">Confirm your sign-in</h2>
+      <p style="margin: 0 0 12px;">Use this code to complete your TeamPad sign-in:</p>
+      <p style="margin: 0 0 16px; font-size: 22px; font-weight: 700; letter-spacing: 2px;">
+        ${safeCode}
+      </p>
+      <p style="margin: 0; font-size: 12px; color: #555;">
+        This code expires in 10 minutes.
+      </p>
+    </div>
+  `
+  const text = `Your TeamPad sign-in code: ${code}\nThis code expires in 10 minutes.`
+  return { subject, html, text }
+}
+
 const buildMentionEmail = ({ workspaceName, senderName, snippet, appUrl }) => {
   const safeWorkspace = escapeHtml(workspaceName || 'TeamPad workspace')
   const safeSender = escapeHtml(senderName || 'Someone')
@@ -239,6 +258,28 @@ export const sendSignupOtpEmail = async ({ to, code }) => {
 
   await verifyTransporter()
   const { subject, html, text } = buildSignupOtpEmail({ code })
+  const transporter = getTransporter()
+  const info = await transporter.sendMail({
+    from,
+    to,
+    subject,
+    html,
+    text,
+  })
+
+  return { sent: true, messageId: info?.messageId }
+}
+
+export const sendTwoFactorCodeEmail = async ({ to, code }) => {
+  const host = (process.env.SMTP_HOST || '').trim()
+  const from = (process.env.SMTP_FROM || '').trim()
+  if (!host || !from) {
+    logSkippedEmail('missing_config', { to })
+    return { sent: false, skipped: true, reason: 'missing_config' }
+  }
+
+  await verifyTransporter()
+  const { subject, html, text } = buildTwoFactorEmail({ code })
   const transporter = getTransporter()
   const info = await transporter.sendMail({
     from,

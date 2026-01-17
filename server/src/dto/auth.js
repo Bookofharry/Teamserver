@@ -22,6 +22,20 @@ export const loginSchema = z.object({
   password: z.string().min(8),
 })
 
+export const twoFactorVerifySchema = z.object({
+  token: z.string().trim().min(1),
+  code: z.string().trim().min(6).max(6),
+})
+
+export const twoFactorEnrollVerifySchema = z.object({
+  token: z.string().trim().min(1),
+  code: z.string().trim().min(6).max(6),
+})
+
+export const twoFactorResendSchema = z.object({
+  token: z.string().trim().min(1),
+})
+
 export const forgotPasswordSchema = z.object({
   email: z.string().trim().email('Valid email is required'),
 })

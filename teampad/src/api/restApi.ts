@@ -72,6 +72,14 @@ type UpgradeIntentResponse = {
   alreadyPending?: boolean;
 };
 
+type SessionResponse = {
+  userId: string;
+  email?: string;
+  accessToken?: string;
+  twoFactorRequired?: boolean;
+  twoFactorToken?: string;
+};
+
 type WorkspaceAnalyticsResponse = {
   window: {
     days: number;
@@ -679,7 +687,7 @@ export const restApi = {
     password: string;
     code: string;
   }): Promise<{ userId: string; email?: string }> {
-    const data = await request<{ userId: string; email?: string; accessToken?: string }>("/auth/signup/verify", {
+    const data = await request<SessionResponse>("/auth/signup/verify", {
       method: "POST",
       body: JSON.stringify(input),
     });
@@ -689,8 +697,8 @@ export const restApi = {
     return data;
   },
 
-  async login(input: { email: string; password: string }): Promise<{ userId: string; email?: string }> {
-    const data = await request<{ userId: string; email?: string; accessToken?: string }>("/auth/login", {
+  async login(input: { email: string; password: string }): Promise<SessionResponse> {
+    const data = await request<SessionResponse>("/auth/login", {
       method: "POST",
       body: JSON.stringify(input),
     });
@@ -698,6 +706,43 @@ export const restApi = {
       setAuthToken(data.accessToken);
     }
     return data;
+  },
+
+  async verifyTwoFactorLogin(input: { token: string; code: string }): Promise<SessionResponse> {
+    const data = await request<SessionResponse>("/auth/2fa/verify", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    if (data.accessToken) {
+      setAuthToken(data.accessToken);
+    }
+    return data;
+  },
+
+  async resendTwoFactorLogin(input: { token: string }): Promise<{ sent: boolean }> {
+    return request<{ sent: boolean }>("/auth/2fa/resend", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  async requestTwoFactorEnroll(): Promise<{ token: string }> {
+    return request<{ token: string }>("/auth/2fa/enroll/request", {
+      method: "POST",
+    });
+  },
+
+  async verifyTwoFactorEnroll(input: { token: string; code: string }): Promise<{ enabled: boolean }> {
+    return request<{ enabled: boolean }>("/auth/2fa/enroll/verify", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  async disableTwoFactor(): Promise<{ disabled: boolean }> {
+    return request<{ disabled: boolean }>("/auth/2fa/disable", {
+      method: "POST",
+    });
   },
 
   async clearSession(): Promise<{ cleared: boolean }> {

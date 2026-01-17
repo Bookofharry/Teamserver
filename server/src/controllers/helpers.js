@@ -14,7 +14,7 @@ export const mapProfileRow = (profile) => ({
   name: profile?.full_name || profile?.name || 'Unknown',
   email: profile?.email || '',
   avatar: profile?.avatar_url || null,
-  twoFactorEnabled: false,
+  twoFactorEnabled: profile?.two_factor_enabled ?? false,
   plan: normalizePlan(profile?.plan) || (profile?.is_subscribed ? 'premium' : 'free'),
   isSubscribed: normalizePlan(profile?.plan) ? normalizePlan(profile?.plan) !== 'free' : profile?.is_subscribed ?? false,
   lastWorkspaceId: profile?.last_workspace_id ?? null,

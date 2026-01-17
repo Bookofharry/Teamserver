@@ -19,6 +19,9 @@ import {
   signupSchema,
   signupRequestSchema,
   signupVerifySchema,
+  twoFactorVerifySchema,
+  twoFactorEnrollVerifySchema,
+  twoFactorResendSchema,
   updateMeSchema,
   forgotPasswordSchema,
 } from '../dto/auth.js'
@@ -29,14 +32,42 @@ import {
   toUserResponse,
 } from '../dto/responses/auth.js'
 import { sendPasswordResetEmail } from '../utils/email.js'
-import { sendSignupOtpEmail } from '../utils/email.js'
+import { sendSignupOtpEmail, sendTwoFactorCodeEmail } from '../utils/email.js'
 import logger from '../utils/logger.js'
 
 const OTP_TTL_MS = 10 * 60 * 1000
 const OTP_COOLDOWN_MS = 60 * 1000
+const TWO_FACTOR_TTL_MS = 10 * 60 * 1000
 
 const sendInvalid = (res, message) =>
   res.status(400).json({ error: { code: 'invalid_request', message } })
+
+const generateOtpCode = () => String(Math.floor(100000 + Math.random() * 900000))
+
+const createTwoFactorCode = async (supabase, { userId, purpose }) => {
+  const code = generateOtpCode()
+  const token = `tfa_${crypto.randomUUID()}`
+  const expiresAt = new Date(Date.now() + TWO_FACTOR_TTL_MS).toISOString()
+
+  await supabase
+    .from('two_factor_codes')
+    .delete()
+    .eq('user_id', userId)
+    .eq('purpose', purpose)
+
+  const { error } = await supabase
+    .from('two_factor_codes')
+    .insert({
+      user_id: userId,
+      token,
+      code,
+      purpose,
+      expires_at: expiresAt,
+    })
+
+  if (error) throw error
+  return { code, token, expiresAt }
+}
 
 export const getMe = async (req, res) => {
   const supabase = getSupabaseAdmin()
@@ -49,7 +80,7 @@ export const getMe = async (req, res) => {
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, full_name, avatar_url, is_subscribed, plan, last_workspace_id, status, status_emoji, has_seen_onboarding')
+    .select('id, email, full_name, avatar_url, is_subscribed, plan, two_factor_enabled, session_version, last_workspace_id, status, status_emoji, has_seen_onboarding')
     .eq('id', req.auth.userId)
     .single()
 
@@ -111,7 +142,7 @@ export const updateMe = async (req, res) => {
     .from('profiles')
     .update(updates)
     .eq('id', req.auth.userId)
-    .select('id, email, full_name, avatar_url, is_subscribed, plan, last_workspace_id, status, status_emoji, has_seen_onboarding')
+    .select('id, email, full_name, avatar_url, is_subscribed, plan, two_factor_enabled, session_version, last_workspace_id, status, status_emoji, has_seen_onboarding')
     .single()
 
   if (error) {
@@ -347,7 +378,7 @@ export const login = async (req, res) => {
 
   const { data: profileRow, error: profileError } = await supabase
     .from('profiles')
-    .select('plan, is_subscribed, full_name, session_version')
+    .select('plan, is_subscribed, full_name, session_version, two_factor_enabled')
     .eq('id', userRow.id)
     .maybeSingle()
   if (profileError) {
@@ -378,6 +409,30 @@ export const login = async (req, res) => {
     }
   }
 
+  if (profileRow?.two_factor_enabled) {
+    try {
+      const { code, token } = await createTwoFactorCode(supabase, {
+        userId: userRow.id,
+        purpose: 'login',
+      })
+      const emailResult = await sendTwoFactorCodeEmail({ to: userRow.email, code })
+      if (!emailResult?.sent) {
+        logger.warn({ email: userRow.email, reason: emailResult?.reason }, 'Two-factor email failed to send')
+        return res.status(500).json({ error: { code: 'email_failed', message: 'Failed to send verification code' } })
+      }
+      return res.json({
+        data: toSessionResponse({
+          userId: userRow.id,
+          email: userRow.email,
+          twoFactorRequired: true,
+          twoFactorToken: token,
+        }),
+      })
+    } catch (error) {
+      return handleSupabaseError(res, error, 'Failed to start two-factor login')
+    }
+  }
+
   const token = await createAuthToken({
     userId: userRow.id,
     email: userRow.email,
@@ -398,6 +453,196 @@ export const clearSession = async (_req, res) => {
   res.clearCookie(getAuthCookieName(), cookieOptions)
   clearCsrfCookie(res)
   return res.json({ data: toClearSessionResponse({ cleared: true }) })
+}
+
+export const requestTwoFactorEnroll = async (req, res) => {
+  const supabase = getSupabaseAdmin()
+  const { data: profileRow, error: profileError } = await supabase
+    .from('profiles')
+    .select('email, two_factor_enabled')
+    .eq('id', req.auth.userId)
+    .maybeSingle()
+
+  if (profileError) {
+    return handleSupabaseError(res, profileError, 'Failed to load profile')
+  }
+  if (!profileRow) {
+    return res.status(404).json({ error: { code: 'not_found', message: 'Profile not found' } })
+  }
+  if (profileRow.two_factor_enabled) {
+    return res.status(400).json({ error: { code: 'invalid_request', message: 'Two-factor already enabled' } })
+  }
+
+  try {
+    const { code, token } = await createTwoFactorCode(supabase, {
+      userId: req.auth.userId,
+      purpose: 'enroll',
+    })
+    const emailResult = await sendTwoFactorCodeEmail({ to: profileRow.email, code })
+    if (!emailResult?.sent) {
+      logger.warn({ email: profileRow.email, reason: emailResult?.reason }, 'Two-factor email failed to send')
+      return res.status(500).json({ error: { code: 'email_failed', message: 'Failed to send verification code' } })
+    }
+    return res.json({ data: { token } })
+  } catch (error) {
+    return handleSupabaseError(res, error, 'Failed to send verification code')
+  }
+}
+
+export const verifyTwoFactorEnroll = async (req, res) => {
+  const supabase = getSupabaseAdmin()
+  const input = parseBody(twoFactorEnrollVerifySchema, req, res)
+  if (!input) return
+
+  const { data: codeRow, error: codeError } = await supabase
+    .from('two_factor_codes')
+    .select('id, user_id, code, expires_at')
+    .eq('token', input.token)
+    .eq('purpose', 'enroll')
+    .maybeSingle()
+
+  if (codeError) {
+    return handleSupabaseError(res, codeError, 'Failed to verify code')
+  }
+  if (!codeRow || codeRow.user_id !== req.auth.userId) {
+    return res.status(400).json({ error: { code: 'invalid_request', message: 'Invalid verification code' } })
+  }
+  if (new Date(codeRow.expires_at).getTime() <= Date.now() || codeRow.code !== input.code) {
+    return res.status(400).json({ error: { code: 'invalid_request', message: 'Invalid or expired code' } })
+  }
+
+  const { error: updateError } = await supabase
+    .from('profiles')
+    .update({ two_factor_enabled: true })
+    .eq('id', req.auth.userId)
+
+  if (updateError) {
+    return handleSupabaseError(res, updateError, 'Failed to enable two-factor')
+  }
+
+  await supabase.from('two_factor_codes').delete().eq('user_id', req.auth.userId)
+  return res.json({ data: { enabled: true } })
+}
+
+export const disableTwoFactor = async (req, res) => {
+  const supabase = getSupabaseAdmin()
+  const { error: updateError } = await supabase
+    .from('profiles')
+    .update({ two_factor_enabled: false })
+    .eq('id', req.auth.userId)
+
+  if (updateError) {
+    return handleSupabaseError(res, updateError, 'Failed to disable two-factor')
+  }
+
+  await supabase.from('two_factor_codes').delete().eq('user_id', req.auth.userId)
+  return res.json({ data: { disabled: true } })
+}
+
+export const verifyTwoFactorLogin = async (req, res) => {
+  const supabase = getSupabaseAdmin()
+  const input = parseBody(twoFactorVerifySchema, req, res)
+  if (!input) return
+
+  const { data: codeRow, error: codeError } = await supabase
+    .from('two_factor_codes')
+    .select('id, user_id, code, expires_at')
+    .eq('token', input.token)
+    .eq('purpose', 'login')
+    .maybeSingle()
+
+  if (codeError) {
+    return handleSupabaseError(res, codeError, 'Failed to verify code')
+  }
+  if (!codeRow) {
+    return res.status(400).json({ error: { code: 'invalid_request', message: 'Invalid verification code' } })
+  }
+  if (new Date(codeRow.expires_at).getTime() <= Date.now() || codeRow.code !== input.code) {
+    return res.status(400).json({ error: { code: 'invalid_request', message: 'Invalid or expired code' } })
+  }
+
+  const { data: profileRow, error: profileError } = await supabase
+    .from('profiles')
+    .select('email, full_name, session_version')
+    .eq('id', codeRow.user_id)
+    .maybeSingle()
+
+  if (profileError) {
+    return handleSupabaseError(res, profileError, 'Failed to load profile')
+  }
+  if (!profileRow) {
+    return res.status(404).json({ error: { code: 'not_found', message: 'Profile not found' } })
+  }
+
+  await supabase.from('two_factor_codes').delete().eq('id', codeRow.id)
+
+  const token = await createAuthToken({
+    userId: codeRow.user_id,
+    email: profileRow.email,
+    name: profileRow.full_name || '',
+    sessionVersion: profileRow.session_version ?? 0,
+  })
+  const cookieOptions = buildAuthCookieOptions({
+    exp: Math.floor(Date.now() / 1000) + getAuthTokenTtlSeconds(),
+  })
+  res.cookie(getAuthCookieName(), token, cookieOptions)
+  await supabase.from('users').update({ last_login_at: new Date().toISOString() }).eq('id', codeRow.user_id)
+
+  return res.json({
+    data: toSessionResponse({ userId: codeRow.user_id, email: profileRow.email, accessToken: token }),
+  })
+}
+
+export const resendTwoFactorLogin = async (req, res) => {
+  const supabase = getSupabaseAdmin()
+  const input = parseBody(twoFactorResendSchema, req, res)
+  if (!input) return
+
+  const { data: codeRow, error: codeError } = await supabase
+    .from('two_factor_codes')
+    .select('id, user_id, expires_at')
+    .eq('token', input.token)
+    .eq('purpose', 'login')
+    .maybeSingle()
+
+  if (codeError) {
+    return handleSupabaseError(res, codeError, 'Failed to resend code')
+  }
+  if (!codeRow) {
+    return res.status(400).json({ error: { code: 'invalid_request', message: 'Invalid verification request' } })
+  }
+
+  const { data: profileRow, error: profileError } = await supabase
+    .from('profiles')
+    .select('email')
+    .eq('id', codeRow.user_id)
+    .maybeSingle()
+
+  if (profileError) {
+    return handleSupabaseError(res, profileError, 'Failed to load profile')
+  }
+  if (!profileRow) {
+    return res.status(404).json({ error: { code: 'not_found', message: 'Profile not found' } })
+  }
+
+  const newCode = generateOtpCode()
+  const expiresAt = new Date(Date.now() + TWO_FACTOR_TTL_MS).toISOString()
+  const { error: updateError } = await supabase
+    .from('two_factor_codes')
+    .update({ code: newCode, expires_at: expiresAt })
+    .eq('id', codeRow.id)
+
+  if (updateError) {
+    return handleSupabaseError(res, updateError, 'Failed to resend code')
+  }
+
+  const emailResult = await sendTwoFactorCodeEmail({ to: profileRow.email, code: newCode })
+  if (!emailResult?.sent) {
+    logger.warn({ email: profileRow.email, reason: emailResult?.reason }, 'Two-factor resend email failed')
+    return res.status(500).json({ error: { code: 'email_failed', message: 'Failed to send verification code' } })
+  }
+
+  return res.json({ data: { sent: true } })
 }
 
 export const signOutEverywhere = async (req, res) => {

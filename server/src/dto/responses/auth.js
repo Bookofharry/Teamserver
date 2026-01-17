@@ -21,6 +21,8 @@ export const sessionResponseSchema = z.object({
   userId: z.string(),
   email: z.string(),
   accessToken: z.string().optional(),
+  twoFactorRequired: z.boolean().optional(),
+  twoFactorToken: z.string().optional(),
 })
 
 export const checkEmailResponseSchema = z.object({

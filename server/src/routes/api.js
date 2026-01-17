@@ -8,6 +8,11 @@ import {
   getMe,
   login,
   refreshSession,
+  requestTwoFactorEnroll,
+  verifyTwoFactorEnroll,
+  disableTwoFactor,
+  verifyTwoFactorLogin,
+  resendTwoFactorLogin,
   signOutEverywhere,
   resetPassword,
   requestSignupOtp,
@@ -124,6 +129,8 @@ router.use('/auth/login', (req, res, next) => {
 
 router.post('/auth/login', authLimiter, login)
 router.post('/auth/logout', authLimiter, clearSession)
+router.post('/auth/2fa/verify', authLimiter, verifyTwoFactorLogin)
+router.post('/auth/2fa/resend', authLimiter, resendTwoFactorLogin)
 router.post('/auth/forgot-password', forgotPassword)
 router.post('/auth/reset-password', resetPassword)
 router.get('/invites/:token', publicLimiter, getInviteInfo)
@@ -135,6 +142,9 @@ router.get('/me', getMe)
 router.patch('/me', updateMe)
 router.get('/auth/refresh', refreshSession)
 router.post('/auth/sign-out-everywhere', signOutEverywhere)
+router.post('/auth/2fa/enroll/request', requestTwoFactorEnroll)
+router.post('/auth/2fa/enroll/verify', verifyTwoFactorEnroll)
+router.post('/auth/2fa/disable', disableTwoFactor)
 router.post('/upgrade-intents', createUpgradeIntent)
 router.get('/invites', listMyInvites)
 

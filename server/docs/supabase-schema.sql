@@ -16,6 +16,7 @@ create table if not exists profiles (
   avatar_url text,
   is_subscribed boolean default false,
   plan text not null default 'free',
+  two_factor_enabled boolean default false,
   session_version integer default 0,
   last_workspace_id uuid,
   created_at timestamptz default now()
@@ -433,6 +434,16 @@ create table if not exists event_logs (
   created_at timestamptz default now()
 );
 
+create table if not exists two_factor_codes (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  token text not null unique,
+  code text not null,
+  purpose text not null,
+  expires_at timestamptz not null,
+  created_at timestamptz default now()
+);
+
 create table if not exists upgrade_intents (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references profiles(id) on delete cascade,
@@ -488,6 +499,9 @@ create index if not exists idx_event_logs_user_id on event_logs(user_id);
 create index if not exists idx_event_logs_workspace_id on event_logs(workspace_id);
 create index if not exists idx_event_logs_action on event_logs(action);
 create index if not exists idx_event_logs_created_at on event_logs(created_at);
+create index if not exists idx_two_factor_codes_user_id on two_factor_codes(user_id);
+create index if not exists idx_two_factor_codes_token on two_factor_codes(token);
+create index if not exists idx_two_factor_codes_purpose on two_factor_codes(purpose);
 create index if not exists idx_upgrade_intents_user_id on upgrade_intents(user_id);
 create index if not exists idx_upgrade_intents_status on upgrade_intents(status);
 create unique index if not exists idx_upgrade_intents_unique on upgrade_intents(user_id, plan, status);
@@ -513,6 +527,7 @@ alter table workspace_message_reactions enable row level security;
 alter table workspace_message_mentions enable row level security;
 alter table workspace_invites enable row level security;
 alter table event_logs enable row level security;
+alter table two_factor_codes enable row level security;
 alter table upgrade_intents enable row level security;
 alter table idempotency_keys enable row level security;
 alter table password_reset_tokens enable row level security;

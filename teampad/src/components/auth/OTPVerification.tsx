@@ -72,6 +72,12 @@ export function OTPVerification({ email, onVerify, onResend, onBack, isLoading }
 
   return (
     <div className="space-y-6">
+      <div>
+        <Button variant="ghost" size="sm" onClick={onBack} className="px-2">
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </Button>
+      </div>
 
       <div className="text-center space-y-2">
         <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
