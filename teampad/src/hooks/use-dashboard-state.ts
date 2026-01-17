@@ -60,7 +60,7 @@ export function useDashboardState() {
     refetch: refetchGroups,
   } = useGroups(currentWorkspaceId);
 
-  const { data: me, isLoading: meLoading, isFetching: meFetching } = useMe();
+  const { data: me, isLoading: meLoading, isFetching: meFetching, isFetchedAfterMount: meFetchedAfterMount } = useMe();
   const createWorkspace = useCreateWorkspace();
   const deleteWorkspace = useDeleteWorkspace();
   const updateProfile = useUpdateProfile();
@@ -158,7 +158,7 @@ export function useDashboardState() {
     isMobile,
     isTablet,
     me,
-    meLoading: meLoading || meFetching,
+    meLoading: meLoading || meFetching || !meFetchedAfterMount,
 
     currentWorkspaceId,
     setCurrentWorkspaceId,

@@ -425,6 +425,7 @@ export default function Dashboard() {
     data: members = [],
     isLoading: membersLoading,
     isFetching: membersFetching,
+    isFetchedAfterMount: membersFetchedAfterMount,
   } = useWorkspaceMembers(currentWorkspaceId, Boolean(currentWorkspaceId));
   const currentMember = members.find((member) => member.userId === (me?.id ?? ''));
   const canManageWorkspace = currentMember?.role === 'owner' || currentMember?.role === 'admin';
@@ -872,7 +873,7 @@ export default function Dashboard() {
             isGroupsError={isGroupsError}
             groupsErrorMessage={groupsErrorMessage}
             members={members}
-            membersLoading={membersLoading || membersFetching}
+            membersLoading={membersLoading || membersFetching || !membersFetchedAfterMount}
             currentUserId={me?.id ?? null}
             currentUser={me ?? null}
             currentUserLoading={meLoading}
