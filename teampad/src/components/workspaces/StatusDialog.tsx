@@ -4,17 +4,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
 import { useUpdateProfile } from '@/hooks/use-data';
-import type { User } from '@/types';
+import type { User, WorkspaceMember } from '@/types';
 
 interface StatusDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   user: User;
+  workspaceId?: string | null;
 }
 
-export function StatusDialog({ open, onOpenChange, user }: StatusDialogProps) {
+export function StatusDialog({ open, onOpenChange, user, workspaceId }: StatusDialogProps) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const updateProfile = useUpdateProfile();
   const [editStatusText, setEditStatusText] = useState('');
   const [editStatusEmoji, setEditStatusEmoji] = useState('');
@@ -27,11 +30,31 @@ export function StatusDialog({ open, onOpenChange, user }: StatusDialogProps) {
 
   const handleSaveStatus = async (event: React.FormEvent) => {
     event.preventDefault();
+    const nextStatus = editStatusText.trim() || null;
+    const nextEmoji = editStatusEmoji.trim() || null;
     try {
       await updateProfile.mutateAsync({
-        status: editStatusText.trim() || null,
-        statusEmoji: editStatusEmoji.trim() || null,
+        status: nextStatus,
+        statusEmoji: nextEmoji,
       });
+      if (workspaceId) {
+        queryClient.setQueryData<WorkspaceMember[]>(
+          ['workspace-members', workspaceId],
+          (existing = []) =>
+            existing.map((member) =>
+              member.userId === user.id
+                ? {
+                    ...member,
+                    user: {
+                      ...member.user,
+                      status: nextStatus,
+                      statusEmoji: nextEmoji,
+                    },
+                  }
+                : member,
+            ),
+        );
+      }
       onOpenChange(false);
       toast({ title: 'Status updated', description: 'Your vibe has been shared.' });
     } catch (error) {

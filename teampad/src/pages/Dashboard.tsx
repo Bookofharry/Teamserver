@@ -975,6 +975,7 @@ export default function Dashboard() {
             open={statusDialogOpen}
             onOpenChange={setStatusDialogOpen}
             user={me}
+            workspaceId={currentWorkspace?.id}
           />
         </Suspense>
       )}
