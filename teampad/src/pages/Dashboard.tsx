@@ -33,6 +33,9 @@ const LazyMobileNoteSheet = lazy(() =>
 const LazyMembersDialog = lazy(() =>
   import('@/components/workspaces/MembersDialog').then((mod) => ({ default: mod.MembersDialog })),
 );
+const LazyStatusDialog = lazy(() =>
+  import('@/components/workspaces/StatusDialog').then((mod) => ({ default: mod.StatusDialog })),
+);
 const LazyWorkspaceDialog = lazy(() =>
   import('@/components/dashboard/WorkspaceDialogs').then((mod) => ({ default: mod.WorkspaceDialog })),
 );
@@ -73,6 +76,7 @@ export default function Dashboard() {
     const stored = window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
     return stored === null ? true : stored === 'true';
   });
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [notesPanelWidth, setNotesPanelWidth] = useState(() => {
     if (typeof window === 'undefined') return 360;
     const stored = window.localStorage.getItem(NOTES_WIDTH_KEY);
@@ -157,6 +161,11 @@ export default function Dashboard() {
 
   const handleGroupSelect = (groupId: string) => {
     baseHandleGroupSelect(groupId);
+  };
+
+  const handleOpenStatus = () => {
+    setStatusDialogOpen(true);
+    if (isMobile) setSidebarOpen(false);
   };
 
 
@@ -870,6 +879,7 @@ export default function Dashboard() {
             onDeleteGroup={handleDeleteGroup}
             isWorkspaceOwner={Boolean(isWorkspaceOwner)}
             onOpenMembers={() => setMembersDialogOpen(true)}
+            onOpenStatus={handleOpenStatus}
             onOpenSettings={handleOpenSettings}
             onOpenChat={() => setShowChatPanel(true)}
             onRetryGroups={refetchGroups}
@@ -959,6 +969,15 @@ export default function Dashboard() {
           workspace={currentWorkspace}
         />
       </Suspense>
+      {me && (
+        <Suspense fallback={overlayFallback}>
+          <LazyStatusDialog
+            open={statusDialogOpen}
+            onOpenChange={setStatusDialogOpen}
+            user={me}
+          />
+        </Suspense>
+      )}
       {me && (
         <Suspense fallback={overlayFallback}>
           <LazySettingsDrawer

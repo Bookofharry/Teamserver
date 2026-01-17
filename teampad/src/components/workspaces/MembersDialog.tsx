@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Copy, SmilePlus } from 'lucide-react';
+import { Copy } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ColorizedText } from '@/components/ui/colorized-text';
@@ -22,7 +22,6 @@ import {
   useLeaveWorkspace,
   useWorkspaceInvites,
   useWorkspaceMembers,
-  useUpdateProfile,
 } from '@/hooks/use-data';
 import { useToast } from '@/hooks/use-toast';
 import { sanitizeEmail } from '@/lib/sanitize';
@@ -34,7 +33,11 @@ interface MembersDialogProps {
   workspace: Workspace;
 }
 
-export function MembersDialog({ open, onOpenChange, workspace }: MembersDialogProps) {
+export function MembersDialog({
+  open,
+  onOpenChange,
+  workspace,
+}: MembersDialogProps) {
   const { toast } = useToast();
   const { data: members = [], isLoading } = useWorkspaceMembers(workspace.id, open);
   const { data: me } = useMe(open);
@@ -42,40 +45,9 @@ export function MembersDialog({ open, onOpenChange, workspace }: MembersDialogPr
   const createInvite = useCreateInvite();
   const removeMember = useRemoveWorkspaceMember();
   const leaveWorkspace = useLeaveWorkspace();
-  const updateProfile = useUpdateProfile();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<UserRole>('member');
   const [showInviteForm, setShowInviteForm] = useState(false);
-
-  // Status State
-  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
-  const [editStatusText, setEditStatusText] = useState('');
-  const [editStatusEmoji, setEditStatusEmoji] = useState('');
-
-  useEffect(() => {
-    if (statusDialogOpen && me) {
-      setEditStatusText(me.status || '');
-      setEditStatusEmoji(me.statusEmoji || '');
-    }
-  }, [statusDialogOpen, me]);
-
-  const handleSaveStatus = async (event: React.FormEvent) => {
-    event.preventDefault();
-    try {
-      await updateProfile.mutateAsync({
-        status: editStatusText.trim() || null,
-        statusEmoji: editStatusEmoji.trim() || null,
-      });
-      setStatusDialogOpen(false);
-      toast({ title: 'Status updated', description: 'Your vibe has been shared.' });
-    } catch (error) {
-      toast({
-        title: 'Update failed',
-        description: error instanceof Error ? error.message : 'Please try again.',
-        variant: 'destructive',
-      });
-    }
-  };
 
   useEffect(() => {
     if (!open) {
@@ -271,17 +243,6 @@ export function MembersDialog({ open, onOpenChange, workspace }: MembersDialogPr
                             <p className="text-sm font-medium">
                               <ColorizedText text={member.user.name} />
                               {isYou && <span className="ml-2 text-xs text-muted-foreground">(You)</span>}
-                              {isYou && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-5 w-5 ml-1 text-muted-foreground hover:text-foreground"
-                                  onClick={() => setStatusDialogOpen(true)}
-                                  title="Set status"
-                                >
-                                  <SmilePlus className="h-3 w-3" />
-                                </Button>
-                              )}
                             </p>
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
                               {member.user.email}
@@ -458,50 +419,6 @@ export function MembersDialog({ open, onOpenChange, workspace }: MembersDialogPr
           )}
         </div>
       </DialogContent>
-
-      <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle>Set your status</DialogTitle>
-            <DialogDescription>
-              Share your vibe with the workspace.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSaveStatus} className="space-y-4">
-            <div className="grid grid-cols-[60px_1fr] gap-2">
-              <div className="space-y-2">
-                <Label htmlFor="status-emoji">Emoji</Label>
-                <Input
-                  id="status-emoji"
-                  value={editStatusEmoji}
-                  onChange={(e) => setEditStatusEmoji(e.target.value)}
-                  placeholder="👋"
-                  className="text-center text-lg"
-                  maxLength={2}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="status-text">Message</Label>
-                <Input
-                  id="status-text"
-                  value={editStatusText}
-                  onChange={(e) => setEditStatusText(e.target.value)}
-                  placeholder="What's your focus today?"
-                  maxLength={40}
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="ghost" onClick={() => setStatusDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={updateProfile.isPending}>
-                {updateProfile.isPending ? 'Saving...' : 'Save Status'}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
     </Dialog>
   );
 }
