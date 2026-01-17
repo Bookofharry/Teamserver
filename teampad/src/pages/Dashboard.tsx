@@ -16,6 +16,7 @@ const EDITOR_MIN_WIDTH = 480;
 const NOTES_WIDTH_KEY = 'teampad-notes-width';
 const SIDEBAR_COLLAPSED_KEY = 'teampad-notes-collapsed-state';
 const NOTES_PAGE_SIZE = 50;
+const CHAT_FALLBACK_LIMIT = 200;
 
 const LazyAIPanel = lazy(() =>
   import('@/components/notes/AIPanel').then((mod) => ({ default: mod.AIPanel })),
@@ -182,7 +183,11 @@ export default function Dashboard() {
     isFetching: noteDetailFetching,
     isError: noteDetailError,
   } = useNote(currentNoteId, currentWorkspaceId, Boolean(currentNoteId && currentWorkspaceId));
-  const { data: chatMessages = [] } = useChatMessages(currentWorkspaceId, Boolean(currentWorkspaceId));
+  const { data: chatMessages = [] } = useChatMessages(
+    currentWorkspaceId,
+    Boolean(currentWorkspaceId),
+    { limit: CHAT_FALLBACK_LIMIT, offset: 0 },
+  );
   const { data: chatMentions = [], isLoading: chatMentionsLoading } = useChatMentions(
     currentWorkspaceId,
     Boolean(currentWorkspaceId),
@@ -326,6 +331,18 @@ export default function Dashboard() {
     mentionsMarkedRef.current = true;
     markChatMentionsReadRef.current.mutate(currentWorkspaceId);
   }, [currentWorkspaceId, showChatPanel]);
+
+  useEffect(() => {
+    if (!showChatPanel || !currentWorkspaceId) return;
+    if (markChatMentionsRead.isPending) return;
+    const hasUnread = chatMentions.some((mention) => !mention.readAt && !mention.deletedAt);
+    if (!hasUnread) return;
+    const now = Date.now();
+    const last = lastMentionsMarkedRef.current;
+    if (last.workspaceId === currentWorkspaceId && now - last.openAt < 1000) return;
+    lastMentionsMarkedRef.current = { workspaceId: currentWorkspaceId, openAt: now };
+    markChatMentionsRead.mutate(currentWorkspaceId);
+  }, [chatMentions, showChatPanel, currentWorkspaceId, markChatMentionsRead]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !currentWorkspaceId || !showChatPanel) return;

@@ -49,20 +49,31 @@ const createRealtimeClient = () => {
       }
       try {
         const token = typeof window !== "undefined" ? window.localStorage.getItem("teampad_token") : null;
-        const headers = {
+        let headers = {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         };
 
         let res = await fetch(authUrl, { credentials: "include", cache: "no-store", headers });
         if (res.status === 401) {
           const refreshUrl = getAuthRefreshUrl();
-          await fetch(refreshUrl, { credentials: "include", cache: "no-store", headers }).catch(() => { });
+          const refreshRes = await fetch(refreshUrl, { credentials: "include", cache: "no-store", headers }).catch(() => null);
+          if (refreshRes?.ok) {
+            const payload = await refreshRes.json().catch(() => null);
+            const nextToken = payload?.data?.accessToken;
+            if (typeof nextToken === "string" && nextToken) {
+              window.localStorage.setItem("teampad_token", nextToken);
+            }
+          }
           // Retry with new token if refresh succeeded? 
           // Actually refresh endpoint updates cookie AND should return new token.
           // Ideally we update local storage here too, but for now relying on Cookie or re-login flow.
           // The refresh endpoint in restApi.ts updates the token. 
           // But here we are calling fetch directly. 
           // It's safer to just retry the authUrl fetch.
+          const refreshedToken = typeof window !== "undefined" ? window.localStorage.getItem("teampad_token") : null;
+          headers = {
+            ...(refreshedToken ? { Authorization: `Bearer ${refreshedToken}` } : {}),
+          };
           res = await fetch(authUrl, { credentials: "include", cache: "no-store", headers });
         }
         if (!res.ok) {

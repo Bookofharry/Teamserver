@@ -139,7 +139,9 @@ export const useChatRealtime = (
         (existing = []) =>
           existing.map((item) =>
             item.id === reaction.messageId
-              ? { ...item, reactions: [...item.reactions, reaction] }
+              ? item.reactions.some((entry) => entry.id === reaction.id)
+                ? item
+                : { ...item, reactions: [...item.reactions, reaction] }
               : item,
           ),
       );
@@ -292,6 +294,7 @@ export const useChatRealtime = (
 
     return () => {
       active = false;
+      if (statusTimeout) clearTimeout(statusTimeout);
       if (unsubscribeRoom) unsubscribeRoom();
       chatClient.connection.off(handleConnection);
       setStatus("unavailable");

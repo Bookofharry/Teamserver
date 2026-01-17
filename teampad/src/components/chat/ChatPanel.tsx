@@ -639,11 +639,14 @@ export function ChatPanel({
         contentType: mimeType,
         size: blob.size,
       });
-      await fetch(uploadInfo.uploadUrl, {
+      const uploadRes = await fetch(uploadInfo.uploadUrl, {
         method: "PUT",
         headers: { "Content-Type": mimeType },
         body: blob,
       });
+      if (!uploadRes.ok) {
+        throw new Error("Upload failed");
+      }
 
       await createMessage.mutateAsync({
         workspaceId,
@@ -1247,6 +1250,7 @@ export function ChatPanel({
                       const nextValue = event.target.value;
                       setMessageText(nextValue);
                       updateMentionState(nextValue, event.target.selectionStart ?? nextValue.length);
+                      handleTypingInput();
                       if (errorMessage) setErrorMessage(null);
                     }}
                     onClick={(event) => {
