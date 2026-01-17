@@ -198,6 +198,37 @@ export interface ChatAudit {
   actor?: User;
 }
 
+export interface WorkspaceAnalytics {
+  window: {
+    days: number;
+    start: Date;
+    end: Date;
+  };
+  totals: {
+    members: number;
+    notes: number;
+    messages: number;
+    invites: number;
+  };
+  activity: {
+    notesCreated: number;
+    notesUpdated: number;
+    messagesSent: number;
+    invitesSent: number;
+    membersJoined: number;
+    invitesAccepted: number;
+  };
+}
+
+export interface WorkspaceAuditLogItem {
+  id: string;
+  workspaceId: string;
+  action: string;
+  metadata?: Record<string, unknown> | null;
+  createdAt: Date;
+  actor?: User | null;
+}
+
 export type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'new-version';
 
 export interface AuthState {

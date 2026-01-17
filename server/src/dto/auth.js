@@ -37,7 +37,6 @@ export const updateMeSchema = z
     avatar: z.string().trim().optional(),
     lastWorkspaceId: z.string().trim().uuid().optional(),
     status: z.string().trim().optional().nullable(),
-    statusEmoji: z.string().trim().optional().nullable(),
     hasSeenOnboarding: z.boolean().optional(),
   })
   .refine(
@@ -46,7 +45,6 @@ export const updateMeSchema = z
       data.avatar !== undefined ||
       data.lastWorkspaceId !== undefined ||
       data.status !== undefined ||
-      data.statusEmoji !== undefined ||
       data.hasSeenOnboarding !== undefined,
     {
       message: 'No fields to update',

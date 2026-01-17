@@ -3,7 +3,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useEffect } from "react";
 import { api } from "@/api";
 import { getWorkspaceRoomName, isAblyChatEnabled, publishChatEvent } from "@/lib/ablyChat";
-import type { AdminUser, ChatAudit, ChatMentionNotification, ChatMessage, ChatReaction, Group, InviteDetails, Note, NoteAttachment, NoteVersion, NoteVersionDetail, NoteVersionsPage, PlanTier, User, UserRole, Workspace, WorkspaceInvite, WorkspaceMember } from "@/types";
+import type { AdminUser, ChatAudit, ChatMentionNotification, ChatMessage, ChatReaction, Group, InviteDetails, Note, NoteAttachment, NoteVersion, NoteVersionDetail, NoteVersionsPage, PlanTier, User, UserRole, Workspace, WorkspaceInvite, WorkspaceMember, WorkspaceAnalytics, WorkspaceAuditLogItem } from "@/types";
 
 const normalizeDate = (value?: string | Date | null) =>
   value ? (value instanceof Date ? value : new Date(value)) : null;
@@ -53,7 +53,6 @@ export const useUpdateProfile = () => {
       avatar?: string;
       lastWorkspaceId?: string | null;
       status?: string | null;
-      statusEmoji?: string | null;
       hasSeenOnboarding?: boolean;
     }) => api.updateMe(input),
     onSuccess: (user) => {
@@ -577,6 +576,20 @@ export const useChatAudits = (workspaceId: string | null, enabled = true) =>
   useQuery<ChatAudit[]>({
     queryKey: ["chat-audits", workspaceId],
     queryFn: () => api.listChatAudits(workspaceId as string),
+    enabled: Boolean(workspaceId && enabled),
+  });
+
+export const useWorkspaceAnalytics = (workspaceId: string | null, days = 7, enabled = true) =>
+  useQuery<WorkspaceAnalytics>({
+    queryKey: ["workspace-analytics", workspaceId, days],
+    queryFn: () => api.getWorkspaceAnalytics(workspaceId as string, days),
+    enabled: Boolean(workspaceId && enabled),
+  });
+
+export const useWorkspaceAuditLogs = (workspaceId: string | null, limit = 50, enabled = true) =>
+  useQuery<WorkspaceAuditLogItem[]>({
+    queryKey: ["workspace-audit-logs", workspaceId, limit],
+    queryFn: () => api.listWorkspaceAuditLogs(workspaceId as string, limit),
     enabled: Boolean(workspaceId && enabled),
   });
 

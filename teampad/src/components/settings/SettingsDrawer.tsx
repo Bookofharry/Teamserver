@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { useAcceptInvite, useDeclineInvite, useMyInvites } from '@/hooks/use-data';
+import { useAcceptInvite, useDeclineInvite, useMyInvites, useWorkspaceAnalytics, useWorkspaceAuditLogs } from '@/hooks/use-data';
+import { formatDistanceToNow } from 'date-fns';
 import { ColorizedText } from '@/components/ui/colorized-text';
 import { sanitizeEmail } from '@/lib/sanitize';
 import { api } from '@/api';
@@ -65,6 +66,9 @@ export function SettingsDrawer({
   const [inviteAction, setInviteAction] = useState<null | { token: string; type: 'accept' | 'decline' }>(null);
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [aiProvider, setAiProvider] = useState<'server' | 'mock' | 'gemini'>('server');
+  const [analyticsDays, setAnalyticsDays] = useState(7);
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [isSigningOutEverywhere, setIsSigningOutEverywhere] = useState(false);
 
   const handleWorkspaceNameChange = (value: string) => {
     const cleaned = value.replace(/[^A-Za-z ]/g, '').slice(0, 15);
@@ -84,6 +88,16 @@ export function SettingsDrawer({
   } = useMyInvites(open);
   const acceptInvite = useAcceptInvite();
   const declineInvite = useDeclineInvite();
+  const {
+    data: analytics,
+    isLoading: analyticsLoading,
+    isError: analyticsError,
+  } = useWorkspaceAnalytics(workspace?.id ?? null, analyticsDays, open && canManageWorkspace);
+  const {
+    data: auditLogs = [],
+    isLoading: auditLogsLoading,
+    isError: auditLogsError,
+  } = useWorkspaceAuditLogs(workspace?.id ?? null, 50, auditOpen && canManageWorkspace);
 
   useEffect(() => {
     setName(user.name);
@@ -307,6 +321,47 @@ export function SettingsDrawer({
       title: 'AI provider preference updated',
       description: 'TeamPad will send this preference with AI requests.',
     });
+  };
+
+  const handleSignOutEverywhere = async () => {
+    if (isSigningOutEverywhere) return;
+    setIsSigningOutEverywhere(true);
+    try {
+      await api.signOutEverywhere();
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem('teampad_token');
+        window.location.href = '/auth?view=login';
+      }
+    } catch (error) {
+      toast({
+        title: 'Sign out failed',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSigningOutEverywhere(false);
+    }
+  };
+
+  const formatActionLabel = (action: string) => {
+    const labels: Record<string, string> = {
+      'workspace.created': 'Workspace created',
+      'collection.created': 'Collection created',
+      'note.created': 'Note created',
+      'invite.sent': 'Invite sent',
+      'invite.accepted': 'Invite accepted',
+      'invite.declined': 'Invite declined',
+      'member.removed': 'Member removed',
+      'member.left': 'Member left',
+    };
+    return labels[action] ?? action.replace(/\./g, ' ');
+  };
+
+  const formatMetadata = (metadata?: Record<string, unknown> | null) => {
+    if (!metadata || typeof metadata !== 'object') return null;
+    const entries = Object.entries(metadata).filter(([, value]) => value !== null && value !== undefined);
+    if (!entries.length) return null;
+    return entries.map(([key, value]) => `${key}: ${String(value)}`).join(' | ');
   };
 
   return (
@@ -599,6 +654,101 @@ export function SettingsDrawer({
               <section className="space-y-3 rounded-2xl border border-border/60 bg-card/70 p-4 shadow-sm sm:p-5">
                 <div className="flex items-center justify-between gap-2">
                   <div>
+                    <p className="text-sm font-semibold text-foreground">Analytics & Audit</p>
+                    <p className="text-xs text-muted-foreground">Track usage and review workspace activity.</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setAuditOpen(true)}
+                    disabled={!canManageWorkspace}
+                  >
+                    View audit log
+                  </Button>
+                </div>
+                {!canManageWorkspace && (
+                  <p className="text-xs text-muted-foreground">
+                    Only owners or admins can view analytics and audit logs.
+                  </p>
+                )}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <Label>Activity window</Label>
+                  <Select
+                    value={String(analyticsDays)}
+                    onValueChange={(value) => setAnalyticsDays(Number.parseInt(value, 10))}
+                    disabled={!canManageWorkspace}
+                  >
+                    <SelectTrigger className="w-[160px] bg-background/70">
+                      <SelectValue placeholder="Choose range" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="7">Last 7 days</SelectItem>
+                      <SelectItem value="30">Last 30 days</SelectItem>
+                      <SelectItem value="90">Last 90 days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {analyticsLoading && (
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-20 w-full" />
+                  </div>
+                )}
+                {analyticsError && (
+                  <p className="text-xs text-destructive">Failed to load analytics.</p>
+                )}
+                {!analyticsLoading && !analyticsError && analytics && (
+                  <div className="space-y-4">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
+                        <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Members</p>
+                        <p className="text-2xl font-semibold text-foreground">
+                          {analytics.totals.members.toLocaleString()}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Total</p>
+                      </div>
+                      <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
+                        <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Notes</p>
+                        <p className="text-2xl font-semibold text-foreground">
+                          {analytics.totals.notes.toLocaleString()}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Total</p>
+                      </div>
+                      <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
+                        <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Messages</p>
+                        <p className="text-2xl font-semibold text-foreground">
+                          {analytics.totals.messages.toLocaleString()}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Total</p>
+                      </div>
+                      <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
+                        <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Invites</p>
+                        <p className="text-2xl font-semibold text-foreground">
+                          {analytics.totals.invites.toLocaleString()}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Total</p>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                        Activity last {analytics.window.days} days
+                      </p>
+                      <div className="mt-3 grid gap-2 text-sm text-foreground sm:grid-cols-2">
+                        <div>Notes created: {analytics.activity.notesCreated.toLocaleString()}</div>
+                        <div>Notes updated: {analytics.activity.notesUpdated.toLocaleString()}</div>
+                        <div>Messages sent: {analytics.activity.messagesSent.toLocaleString()}</div>
+                        <div>Members joined: {analytics.activity.membersJoined.toLocaleString()}</div>
+                        <div>Invites sent: {analytics.activity.invitesSent.toLocaleString()}</div>
+                        <div>Invites accepted: {analytics.activity.invitesAccepted.toLocaleString()}</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              <section className="space-y-3 rounded-2xl border border-border/60 bg-card/70 p-4 shadow-sm sm:p-5">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
                     <p className="text-sm font-semibold text-foreground">Security</p>
                     <p className="text-xs text-muted-foreground">Protect your account with stronger controls.</p>
                   </div>
@@ -615,8 +765,8 @@ export function SettingsDrawer({
                     <Button variant="outline" onClick={handleResetPassword} disabled={isResettingPassword}>
                       {isResettingPassword ? 'Sending reset link...' : 'Reset password'}
                     </Button>
-                    <Button variant="outline" disabled>
-                      Sign out everywhere (coming soon)
+                    <Button variant="outline" onClick={handleSignOutEverywhere} disabled={isSigningOutEverywhere}>
+                      {isSigningOutEverywhere ? 'Signing out...' : 'Sign out everywhere'}
                     </Button>
                   </div>
                 </div>
@@ -642,6 +792,51 @@ export function SettingsDrawer({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={auditOpen} onOpenChange={setAuditOpen}>
+        <DialogContent className="sm:max-w-[640px]">
+          <DialogHeader>
+            <DialogTitle>Workspace audit log</DialogTitle>
+            <DialogDescription>
+              Recent activity tracked for this workspace.
+            </DialogDescription>
+          </DialogHeader>
+          {auditLogsLoading && (
+            <div className="text-sm text-muted-foreground">Loading audit log...</div>
+          )}
+          {auditLogsError && (
+            <div className="text-sm text-destructive">Failed to load audit log.</div>
+          )}
+          {!auditLogsLoading && !auditLogsError && auditLogs.length === 0 && (
+            <div className="text-sm text-muted-foreground">No audit activity yet.</div>
+          )}
+          {!auditLogsLoading && !auditLogsError && auditLogs.length > 0 && (
+            <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
+              {auditLogs.map((entry) => {
+                const metadataText = formatMetadata(entry.metadata);
+                return (
+                  <div key={entry.id} className="rounded-lg border border-border bg-card p-3">
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="font-semibold text-foreground">
+                        {entry.actor?.name || 'System'}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {formatDistanceToNow(entry.createdAt, { addSuffix: true })}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                      {formatActionLabel(entry.action)}
+                    </p>
+                    {metadataText && (
+                      <p className="mt-1 text-xs text-muted-foreground truncate">{metadataText}</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={planModalOpen} onOpenChange={setPlanModalOpen}>
         <DialogContent className="sm:max-w-[520px]">

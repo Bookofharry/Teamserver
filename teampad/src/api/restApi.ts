@@ -1,4 +1,4 @@
-import type { Group, InviteDetails, Note, NoteVersionDetail, Workspace, WorkspaceInvite, WorkspaceMember, User, UserRole, PlanTier, PublicNote, AdminUser, NoteAttachment, NoteVersion, ChatMessage, ChatAttachment, ChatReaction, ChatMention, NoteVersionsPage, ChatMentionNotification, ChatAudit } from "@/types";
+import type { Group, InviteDetails, Note, NoteVersionDetail, Workspace, WorkspaceInvite, WorkspaceMember, User, UserRole, PlanTier, PublicNote, AdminUser, NoteAttachment, NoteVersion, ChatMessage, ChatAttachment, ChatReaction, ChatMention, NoteVersionsPage, ChatMentionNotification, ChatAudit, WorkspaceAnalytics, WorkspaceAuditLogItem } from "@/types";
 
 type ApiResponse<T> = { data: T };
 
@@ -70,6 +70,37 @@ type UpgradeIntentResponse = {
   createdAt?: string;
   created_at?: string;
   alreadyPending?: boolean;
+};
+
+type WorkspaceAnalyticsResponse = {
+  window: {
+    days: number;
+    start: string;
+    end: string;
+  };
+  totals: {
+    members: number;
+    notes: number;
+    messages: number;
+    invites: number;
+  };
+  activity: {
+    notesCreated: number;
+    notesUpdated: number;
+    messagesSent: number;
+    invitesSent: number;
+    membersJoined: number;
+    invitesAccepted: number;
+  };
+};
+
+type WorkspaceAuditLogResponse = {
+  id: string;
+  workspaceId: string;
+  action: string;
+  metadata?: Record<string, unknown> | null;
+  createdAt: string;
+  actor?: Partial<User> | null;
 };
 
 type PublicNoteResponse = {
@@ -568,6 +599,25 @@ const normalizeChatAudit = (audit: ChatAuditResponse): ChatAudit => ({
   actor: audit.actor ? normalizeUser(audit.actor) : undefined,
 });
 
+const normalizeWorkspaceAnalytics = (analytics: WorkspaceAnalyticsResponse): WorkspaceAnalytics => ({
+  window: {
+    days: analytics.window.days,
+    start: new Date(analytics.window.start),
+    end: new Date(analytics.window.end),
+  },
+  totals: analytics.totals,
+  activity: analytics.activity,
+});
+
+const normalizeWorkspaceAuditLog = (entry: WorkspaceAuditLogResponse): WorkspaceAuditLogItem => ({
+  id: entry.id,
+  workspaceId: entry.workspaceId,
+  action: entry.action,
+  metadata: entry.metadata ?? null,
+  createdAt: new Date(entry.createdAt),
+  actor: entry.actor ? normalizeUser(entry.actor) : null,
+});
+
 const normalizeChatMention = (mention: ChatMentionResponse): ChatMention => ({
   id: mention.id,
   messageId: mention.messageId,
@@ -658,6 +708,14 @@ export const restApi = {
     return res;
   },
 
+  async signOutEverywhere(): Promise<{ cleared: boolean }> {
+    const res = await request<{ cleared: boolean }>("/auth/sign-out-everywhere", {
+      method: "POST",
+    });
+    setAuthToken(null);
+    return res;
+  },
+
   async forgotPassword(email: string): Promise<{ sent: boolean }> {
     return request<{ sent: boolean }>("/auth/forgot-password", {
       method: "POST",
@@ -686,7 +744,6 @@ export const restApi = {
     avatar?: string;
     lastWorkspaceId?: string | null;
     status?: string | null;
-    statusEmoji?: string | null;
     hasSeenOnboarding?: boolean;
   }): Promise<User> {
     const data = await request<Partial<User>>("/me", {
@@ -1233,5 +1290,25 @@ export const restApi = {
   async listChatAudits(workspaceId: string): Promise<ChatAudit[]> {
     const data = await request<ChatAuditResponse[]>(`/workspaces/${workspaceId}/chat/audits`);
     return data.map(normalizeChatAudit);
+  },
+
+  async getWorkspaceAnalytics(workspaceId: string, days = 7): Promise<WorkspaceAnalytics> {
+    const params = new URLSearchParams();
+    if (days) params.set("days", String(days));
+    const url = params.toString()
+      ? `/workspaces/${workspaceId}/analytics?${params.toString()}`
+      : `/workspaces/${workspaceId}/analytics`;
+    const data = await request<WorkspaceAnalyticsResponse>(url);
+    return normalizeWorkspaceAnalytics(data);
+  },
+
+  async listWorkspaceAuditLogs(workspaceId: string, limit = 50): Promise<WorkspaceAuditLogItem[]> {
+    const params = new URLSearchParams();
+    if (limit) params.set("limit", String(limit));
+    const url = params.toString()
+      ? `/workspaces/${workspaceId}/audit-logs?${params.toString()}`
+      : `/workspaces/${workspaceId}/audit-logs`;
+    const data = await request<WorkspaceAuditLogResponse[]>(url);
+    return data.map(normalizeWorkspaceAuditLog);
   },
 };

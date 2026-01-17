@@ -8,12 +8,14 @@ import {
   getMe,
   login,
   refreshSession,
+  signOutEverywhere,
   resetPassword,
   requestSignupOtp,
   verifySignupOtp,
   updateMe,
 } from '../controllers/authController.js'
 import { createUpgradeIntent } from '../controllers/billingController.js'
+import { getWorkspaceAnalytics, listWorkspaceAuditLogs } from '../controllers/analyticsController.js'
 import { createIdempotencyMiddleware } from '../middleware/idempotency.js'
 import { requireAdmin } from '../middleware/admin.js'
 import { listAdminUsers, updateAdminUserPlan } from '../controllers/adminController.js'
@@ -132,6 +134,7 @@ router.use(requireSupabaseAuth)
 router.get('/me', getMe)
 router.patch('/me', updateMe)
 router.get('/auth/refresh', refreshSession)
+router.post('/auth/sign-out-everywhere', signOutEverywhere)
 router.post('/upgrade-intents', createUpgradeIntent)
 router.get('/invites', listMyInvites)
 
@@ -181,6 +184,8 @@ router.delete('/workspaces/:id/chat/messages/:messageId/reactions/:emoji', delet
 router.post('/workspaces/:id/chat/mentions/read', markChatMentionsRead)
 router.post('/workspaces/:id/chat/uploads', createChatUpload)
 router.post('/workspaces/:id/chat/events', requireAdmin, publishChatEvent)
+router.get('/workspaces/:id/analytics', getWorkspaceAnalytics)
+router.get('/workspaces/:id/audit-logs', listWorkspaceAuditLogs)
 
 // AI endpoints (scaffold)
 import { ingestNote, askWorkspace, streamWorkspace, debugAi } from '../controllers/aiController.js'

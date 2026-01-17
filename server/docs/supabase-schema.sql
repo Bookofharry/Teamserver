@@ -16,6 +16,7 @@ create table if not exists profiles (
   avatar_url text,
   is_subscribed boolean default false,
   plan text not null default 'free',
+  session_version integer default 0,
   last_workspace_id uuid,
   created_at timestamptz default now()
 );

@@ -14,6 +14,7 @@ const AI_TONE_GUIDE =
   'If a section has nothing, say "None." ' +
   'If the user asks to create, edit, or delete anything, propose the change and ask for confirmation before applying it. ' +
   'If the notes do not contain enough context, say so plainly.'
+const MAX_AI_PROMPT_CHARS = 2000
 
 const getRateLimitMessage = (err) => {
   const message = String(err?.message || '')
@@ -132,6 +133,9 @@ export async function ingestNote(req, res) {
 export async function askWorkspace(req, res) {
   const { workspaceId, prompt } = req.body
   if (!workspaceId || !prompt) return res.status(400).json({ error: 'workspaceId and prompt required' })
+  if (String(prompt).length > MAX_AI_PROMPT_CHARS) {
+    return res.status(400).json({ error: { code: 'prompt_too_long', message: 'Prompt is too long' } })
+  }
   if (!(await requireWorkspaceMember(req, res, workspaceId))) return
   if (!await ensureAiAccess(req, res)) return
 
@@ -171,6 +175,9 @@ export async function askWorkspace(req, res) {
 export async function streamWorkspace(req, res) {
   const { workspaceId, prompt } = req.body
   if (!workspaceId || !prompt) return res.status(400).json({ error: 'workspaceId and prompt required' })
+  if (String(prompt).length > MAX_AI_PROMPT_CHARS) {
+    return res.status(400).json({ error: { code: 'prompt_too_long', message: 'Prompt is too long' } })
+  }
   if (!(await requireWorkspaceMember(req, res, workspaceId))) return
   if (!await ensureAiAccess(req, res)) return
 

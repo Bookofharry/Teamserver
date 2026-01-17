@@ -3,6 +3,7 @@ import { Bot, X, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { restApi } from '@/api/restApi';
 import type { Group, Note } from '@/types';
+import { useToast } from '@/hooks/use-toast';
 
 interface AIPanelProps {
   isOpen: boolean;
@@ -20,6 +21,7 @@ interface AIPanelProps {
 
 const MAX_HISTORY_MESSAGES = 6;
 const GREETING_MESSAGE = 'Hello! Ask me to summarize, pull action items, or draft next steps.';
+const MAX_AI_PROMPT_CHARS = 2000;
 
 type ConversationMessage = {
   role: 'user' | 'assistant';
@@ -31,6 +33,7 @@ export function AIPanel({
   onClose,
   workspaceId,
 }: AIPanelProps) {
+  const { toast } = useToast();
   const [result, setResult] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
@@ -193,6 +196,14 @@ export function AIPanel({
     if (!basePrompt) return;
     const history = options.includeHistory === false ? [] : conversation;
     const { fullPrompt } = buildPrompt(basePrompt, history);
+    if (fullPrompt.length > MAX_AI_PROMPT_CHARS) {
+      toast({
+        title: 'Prompt too long',
+        description: `Keep prompts under ${MAX_AI_PROMPT_CHARS} characters.`,
+        variant: 'destructive',
+      });
+      return;
+    }
     const requestId = activeRequestIdRef.current + 1;
     activeRequestIdRef.current = requestId;
     setConversation((prev) =>

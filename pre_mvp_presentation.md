@@ -12,7 +12,7 @@
 9) Plans + limits
 10) MVP scope + what’s next
 11) Risks + mitigations
-12) Ask / next step
+12) 2-week validation plan + ask
 
 ## 1) Title + One-Liner
 **TeamPad**  
@@ -88,10 +88,21 @@ Flow:
 - Retention: 40% weekly active teams.
 - Engagement: 3+ notes and 15+ chat messages per workspace.
 
-## 12) Ask / Next Step
+## 12) 2-Week Validation Plan + Ask
+**Plan (2 weeks)**
+- Week 1: ship instrumentation + fix onboarding flow.
+- Week 2: run 5-10 team pilots and review behavior metrics.
+
+**Analytics to prove the MVP bet**
+- Invite -> accept -> first note.
+- Chat message -> note created.
+- Note view -> edit -> save.
+
+**Ask**
 - Approve MVP for private beta with 5-10 teams.
-- Validate retention and version caps.
-- Gather feedback on chat vs. notes usage split.
+- Validate retention and usage split (chat vs. notes).
+
+Details in `teampad/docs/mvp-validation-plan.md`.
 
 ---
 

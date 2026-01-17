@@ -103,9 +103,6 @@ export const updateMe = async (req, res) => {
     }
     updates.status = nextStatus
   }
-  if (input.statusEmoji !== undefined) {
-    updates.status_emoji = input.statusEmoji || null
-  }
   if (input.hasSeenOnboarding !== undefined) {
     updates.has_seen_onboarding = Boolean(input.hasSeenOnboarding)
   }
@@ -176,7 +173,7 @@ export const signup = async (req, res) => {
     return handleSupabaseError(res, error, 'Failed to sync profile')
   }
 
-  const token = await createAuthToken({ userId, email, name })
+  const token = await createAuthToken({ userId, email, name, sessionVersion: 0 })
   const cookieOptions = buildAuthCookieOptions({
     exp: Math.floor(Date.now() / 1000) + getAuthTokenTtlSeconds(),
   })
@@ -311,7 +308,7 @@ export const verifySignupOtp = async (req, res) => {
 
   await supabase.from('signup_otps').delete().eq('email', email)
 
-  const token = await createAuthToken({ userId, email, name })
+  const token = await createAuthToken({ userId, email, name, sessionVersion: 0 })
   const cookieOptions = buildAuthCookieOptions({
     exp: Math.floor(Date.now() / 1000) + getAuthTokenTtlSeconds(),
   })
@@ -350,7 +347,7 @@ export const login = async (req, res) => {
 
   const { data: profileRow, error: profileError } = await supabase
     .from('profiles')
-    .select('plan, is_subscribed, full_name')
+    .select('plan, is_subscribed, full_name, session_version')
     .eq('id', userRow.id)
     .maybeSingle()
   if (profileError) {
@@ -385,6 +382,7 @@ export const login = async (req, res) => {
     userId: userRow.id,
     email: userRow.email,
     name: profileRow?.full_name || '',
+    sessionVersion: profileRow?.session_version ?? 0,
   })
   const cookieOptions = buildAuthCookieOptions({
     exp: Math.floor(Date.now() / 1000) + getAuthTokenTtlSeconds(),
@@ -402,12 +400,41 @@ export const clearSession = async (_req, res) => {
   return res.json({ data: toClearSessionResponse({ cleared: true }) })
 }
 
+export const signOutEverywhere = async (req, res) => {
+  const supabase = getSupabaseAdmin()
+  const { data: profileRow, error: profileError } = await supabase
+    .from('profiles')
+    .select('session_version')
+    .eq('id', req.auth.userId)
+    .maybeSingle()
+
+  if (profileError) {
+    return handleSupabaseError(res, profileError, 'Failed to load session state')
+  }
+
+  const nextVersion = (profileRow?.session_version ?? 0) + 1
+  const { error: updateError } = await supabase
+    .from('profiles')
+    .update({ session_version: nextVersion })
+    .eq('id', req.auth.userId)
+
+  if (updateError) {
+    return handleSupabaseError(res, updateError, 'Failed to revoke sessions')
+  }
+
+  const cookieOptions = buildAuthCookieOptions()
+  res.clearCookie(getAuthCookieName(), cookieOptions)
+  clearCsrfCookie(res)
+  return res.json({ data: toClearSessionResponse({ cleared: true }) })
+}
+
 export const refreshSession = async (req, res) => {
   const name = req.auth?.userMetadata?.full_name || req.auth?.userMetadata?.name || ''
   const token = await createAuthToken({
     userId: req.auth.userId,
     email: req.auth.email,
     name,
+    sessionVersion: req.auth.sessionVersion ?? 0,
   })
   const cookieOptions = buildAuthCookieOptions({
     exp: Math.floor(Date.now() / 1000) + getAuthTokenTtlSeconds(),

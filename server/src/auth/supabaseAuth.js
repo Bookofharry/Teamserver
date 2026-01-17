@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken'
 import logger from '../utils/logger.js'
+import { getSupabaseAdmin } from '../db/supabase.js'
 
 const getJwtSecret = () => (process.env.AUTH_JWT_SECRET || '').trim()
 const getJwtIssuer = () => (process.env.AUTH_JWT_ISSUER || 'teampad').trim()
@@ -32,14 +33,14 @@ const getAuthToken = (req) => {
   return token
 }
 
-export const createAuthToken = async ({ userId, email, role = 'authenticated', name }) => {
+export const createAuthToken = async ({ userId, email, role = 'authenticated', name, sessionVersion = 0 }) => {
   const secretValue = getJwtSecret()
   if (!secretValue) {
     throw new Error('AUTH_JWT_SECRET is not set')
   }
 
   const ttlSeconds = getAuthTokenTtlSeconds()
-  const payload = { email, role, name }
+  const payload = { email, role, name, sessionVersion }
 
   return new Promise((resolve, reject) => {
     jwt.sign(payload, secretValue, {
@@ -138,12 +139,36 @@ export const requireSupabaseAuth = async (req, res, next) => {
     }
 
     const payload = await verifySupabaseToken(token)
+    const supabase = getSupabaseAdmin()
+    const { data: profileRow, error: profileError } = await supabase
+      .from('profiles')
+      .select('session_version')
+      .eq('id', payload.sub)
+      .maybeSingle()
+
+    if (profileError) {
+      logger.warn({ error: profileError?.message || profileError }, 'Auth session version lookup failed')
+      return res.status(500).json({ error: { code: 'auth_check_failed', message: 'Auth check failed' } })
+    }
+
+    const tokenSessionVersion = Number.parseInt(payload.sessionVersion ?? 0, 10) || 0
+    const profileSessionVersion = profileRow?.session_version ?? 0
+    if (!profileRow || profileSessionVersion !== tokenSessionVersion) {
+      return res.status(401).json({
+        error: {
+          code: 'unauthorized',
+          message: 'Session expired',
+        },
+      })
+    }
+
     req.auth = {
       userId: payload.sub,
       email: payload.email || '',
       role: payload.role || 'authenticated',
       userMetadata: payload.name ? { full_name: payload.name } : {},
       appMetadata: {},
+      sessionVersion: tokenSessionVersion,
     }
     return next()
   } catch (error) {
