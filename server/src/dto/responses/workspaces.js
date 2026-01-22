@@ -7,6 +7,7 @@ const workspaceResponseSchema = z.object({
   name: z.string(),
   ownerId: z.string().optional(),
   createdAt: z.string(),
+  memberCount: z.number().optional(),
 })
 
 const workspaceMemberResponseSchema = z.object({

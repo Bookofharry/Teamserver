@@ -74,6 +74,7 @@ import {
 } from '../controllers/chatController.js'
 import { createAblyToken } from '../controllers/ablyController.js'
 import { publishChatEvent } from '../controllers/ablyChatController.js'
+import logger from '../utils/logger.js'
 
 const router = express.Router()
 
@@ -96,8 +97,6 @@ const readLimiterHigh = makeLimiter({ windowMs: 60 * 1000, max: 120 })
 const readLimiterDefault = makeLimiter({ windowMs: 60 * 1000, max: 60 })
 const readLimiterLow = makeLimiter({ windowMs: 60 * 1000, max: 30 })
 const readLimiterChatMarks = makeLimiter({ windowMs: 60 * 1000, max: 300 })
-
-
 const idempotencyWorkspace = createIdempotencyMiddleware('create_workspace')
 const idempotencyGroup = createIdempotencyMiddleware('create_group')
 const idempotencyNote = createIdempotencyMiddleware('create_note')
@@ -107,15 +106,13 @@ router.post('/auth/check-email', checkEmail)
 router.post('/auth/signup/request', requestSignupOtp)
 router.post('/auth/signup/verify', verifySignupOtp)
 
-
-
 // Helper for logging rate limit headers
 const logRateLimit = (req, name) => {
   if (process.env.NODE_ENV !== 'production') {
     logger.info({
       ip: req.ip,
       path: req.path,
-      remaining: req.rateLimit?.remaining
+      remaining: req.rateLimit?.remaining,
     }, `[DEBUG] RateLimit: ${name}`);
   }
 }

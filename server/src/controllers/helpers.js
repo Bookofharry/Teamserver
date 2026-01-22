@@ -7,6 +7,7 @@ export const mapWorkspaceRow = (row) => ({
   name: row.name,
   ownerId: row.owner_id,
   createdAt: row.created_at,
+  memberCount: row.member_count ?? row.memberCount,
 })
 
 export const mapProfileRow = (profile) => ({

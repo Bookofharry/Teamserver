@@ -19,6 +19,7 @@ export interface Workspace {
     id: string;
     name: string;
     members: WorkspaceMember[];
+    memberCount?: number;
     createdAt: Date;
 }
 

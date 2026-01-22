@@ -1,5 +1,17 @@
 import * as SecureStore from 'expo-secure-store';
-import type { User, Workspace, Group, Note, ChatMessage, UserRole, PlanTier, WorkspaceMember } from '../types';
+import { Platform } from 'react-native';
+import type {
+    User,
+    Workspace,
+    Group,
+    Note,
+    ChatMessage,
+    UserRole,
+    WorkspaceMember,
+    ChatAttachment,
+    ChatReaction,
+    ChatMention,
+} from '../types';
 
 type ApiResponse<T> = { data: T };
 
@@ -13,6 +25,68 @@ type SessionResponse = {
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000/api';
 const AUTH_TOKEN_KEY = 'teampad_token';
+const isDev =
+    (globalThis as { __DEV__?: boolean }).__DEV__ ??
+    process.env.NODE_ENV === 'development';
+
+type RawUser = Partial<User> & {
+    last_workspace_id?: string | null;
+    status_emoji?: string | null;
+    has_seen_onboarding?: boolean;
+};
+
+type RawWorkspace = {
+    id: string;
+    name: string;
+    members?: WorkspaceMember[];
+    memberCount?: number;
+    member_count?: number;
+    createdAt: string | Date;
+};
+
+type RawWorkspaceMember = {
+    id?: string;
+    workspaceId?: string;
+    userId: string;
+    user?: Partial<User>;
+    role: UserRole;
+    joinedAt?: string | Date;
+};
+
+type RawGroup = Omit<Group, 'noteCount'> & { noteCount?: number };
+
+type RawNote = Omit<Note, 'createdAt' | 'updatedAt' | 'updatedBy' | 'deletedAt'> & {
+    body?: string;
+    bodyPreview?: string;
+    createdAt: string | Date;
+    updatedAt: string | Date;
+    updatedBy?: Partial<User>;
+    deletedAt?: string | Date | null;
+    isPublic?: boolean;
+    publicSlug?: string | null;
+    isPinned?: boolean;
+    tags?: string[];
+};
+
+type RawChatMessage = Omit<ChatMessage, 'createdAt' | 'editedAt' | 'deletedAt' | 'sender' | 'attachments' | 'reactions' | 'mentions'> & {
+    createdAt: string | Date;
+    editedAt?: string | Date | null;
+    deletedAt?: string | Date | null;
+    sender?: Partial<User>;
+    attachments?: ChatAttachment[];
+    reactions?: ChatReaction[];
+    mentions?: ChatMention[];
+};
+
+if (!process.env.EXPO_PUBLIC_API_URL && isDev) {
+    console.warn(
+        'EXPO_PUBLIC_API_URL is not set. Using localhost may fail on Expo Go devices. Set it in your env.'
+    );
+} else if (API_URL.includes('localhost') && isDev && Platform.OS !== 'web') {
+    console.warn(
+        'API_URL points to localhost. On a physical device, use your machine IP instead.'
+    );
+}
 
 const getAuthToken = async (): Promise<string | null> => {
     try {
@@ -66,7 +140,7 @@ const request = async <T>(
 };
 
 // Normalize functions
-const normalizeUser = (user?: Partial<User>): User => {
+const normalizeUser = (user?: RawUser): User => {
     const plan = user?.plan ?? (user?.isSubscribed ? 'premium' : 'free');
     return {
         id: user?.id ?? 'unknown',
@@ -76,26 +150,27 @@ const normalizeUser = (user?: Partial<User>): User => {
         twoFactorEnabled: user?.twoFactorEnabled ?? false,
         plan,
         isSubscribed: user?.isSubscribed ?? plan !== 'free',
-        lastWorkspaceId: (user as any)?.lastWorkspaceId ?? (user as any)?.last_workspace_id ?? null,
-        status: (user as any)?.status ?? null,
-        statusEmoji: (user as any)?.statusEmoji ?? (user as any)?.status_emoji ?? null,
-        hasSeenOnboarding: (user as any)?.hasSeenOnboarding ?? (user as any)?.has_seen_onboarding ?? false,
+        lastWorkspaceId: user?.lastWorkspaceId ?? user?.last_workspace_id ?? null,
+        status: user?.status ?? null,
+        statusEmoji: user?.statusEmoji ?? user?.status_emoji ?? null,
+        hasSeenOnboarding: user?.hasSeenOnboarding ?? user?.has_seen_onboarding ?? false,
     };
 };
 
-const normalizeWorkspace = (workspace: any): Workspace => ({
+const normalizeWorkspace = (workspace: RawWorkspace): Workspace => ({
     id: workspace.id,
     name: workspace.name,
     members: workspace.members ?? [],
+    memberCount: workspace.memberCount ?? workspace.member_count ?? workspace.members?.length ?? 0,
     createdAt: new Date(workspace.createdAt),
 });
 
-const normalizeGroup = (group: any): Group => ({
+const normalizeGroup = (group: RawGroup): Group => ({
     ...group,
     noteCount: group.noteCount ?? 0,
 });
 
-const normalizeNote = (note: any): Note => ({
+const normalizeNote = (note: RawNote): Note => ({
     ...note,
     body: note.body ?? '',
     bodyPreview: note.bodyPreview,
@@ -107,7 +182,7 @@ const normalizeNote = (note: any): Note => ({
     deletedAt: note.deletedAt ? new Date(note.deletedAt) : null,
 });
 
-const normalizeChatMessage = (message: any): ChatMessage => ({
+const normalizeChatMessage = (message: RawChatMessage): ChatMessage => ({
     id: message.id,
     workspaceId: message.workspaceId,
     body: message.body ?? '',
@@ -191,7 +266,7 @@ export const restApi = {
     },
 
     async getMe(): Promise<User> {
-        const data = await request<Partial<User>>('/me');
+        const data = await request<RawUser>('/me');
         return normalizeUser(data);
     },
 
@@ -201,7 +276,7 @@ export const restApi = {
         lastWorkspaceId?: string | null;
         hasSeenOnboarding?: boolean;
     }): Promise<User> {
-        const data = await request<Partial<User>>('/me', {
+        const data = await request<RawUser>('/me', {
             method: 'PATCH',
             body: JSON.stringify(input),
         });
@@ -210,13 +285,39 @@ export const restApi = {
 
     // Workspaces
     async getWorkspaces(): Promise<Workspace[]> {
-        const data = await request<any[]>('/workspaces');
+        const data = await request<RawWorkspace[]>('/workspaces');
         return data.map(normalizeWorkspace);
     },
 
     async createWorkspace(input: { name: string }): Promise<Workspace> {
-        const data = await request<any>('/workspaces', {
+        const data = await request<RawWorkspace>('/workspaces', {
             method: 'POST',
+            body: JSON.stringify(input),
+        });
+        return normalizeWorkspace(data);
+    },
+
+    async getMembers(workspaceId: string): Promise<WorkspaceMember[]> {
+        const data = await request<RawWorkspaceMember[]>(`/workspaces/${workspaceId}/members`);
+        return data.map((member) => ({
+            id: member.id,
+            workspaceId: member.workspaceId,
+            userId: member.userId,
+            role: member.role,
+            joinedAt: member.joinedAt ? new Date(member.joinedAt) : new Date(),
+            user: normalizeUser(member.user),
+        }));
+    },
+
+    async deleteWorkspace(workspaceId: string): Promise<{ id: string }> {
+        return request<{ id: string }>(`/workspaces/${workspaceId}`, {
+            method: 'DELETE',
+        });
+    },
+
+    async updateWorkspace(workspaceId: string, input: { name: string }): Promise<Workspace> {
+        const data = await request<RawWorkspace>(`/workspaces/${workspaceId}`, {
+            method: 'PATCH',
             body: JSON.stringify(input),
         });
         return normalizeWorkspace(data);
@@ -224,12 +325,12 @@ export const restApi = {
 
     // Groups
     async getGroups(workspaceId: string): Promise<Group[]> {
-        const data = await request<any[]>(`/workspaces/${workspaceId}/groups`);
+        const data = await request<RawGroup[]>(`/workspaces/${workspaceId}/groups`);
         return data.map(normalizeGroup);
     },
 
     async createGroup(input: { workspaceId: string; name: string; color?: string }): Promise<Group> {
-        const data = await request<any>(`/workspaces/${input.workspaceId}/groups`, {
+        const data = await request<RawGroup>(`/workspaces/${input.workspaceId}/groups`, {
             method: 'POST',
             body: JSON.stringify({ name: input.name, color: input.color }),
         });
@@ -250,12 +351,12 @@ export const restApi = {
         if (options?.offset) params.set('offset', String(options.offset));
 
         const query = params.toString();
-        const data = await request<any[]>(`/workspaces/${workspaceId}/notes${query ? `?${query}` : ''}`);
+        const data = await request<RawNote[]>(`/workspaces/${workspaceId}/notes${query ? `?${query}` : ''}`);
         return data.map(normalizeNote);
     },
 
-    async getNote(noteId: string, workspaceId: string): Promise<Note> {
-        const data = await request<any>(`/workspaces/${workspaceId}/notes/${noteId}`);
+    async getNote(noteId: string): Promise<Note> {
+        const data = await request<RawNote>(`/notes/${noteId}`);
         return normalizeNote(data);
     },
 
@@ -266,7 +367,7 @@ export const restApi = {
         body?: string;
         tags?: string[];
     }): Promise<Note> {
-        const data = await request<any>(`/workspaces/${input.workspaceId}/notes`, {
+        const data = await request<RawNote>(`/workspaces/${input.workspaceId}/notes`, {
             method: 'POST',
             body: JSON.stringify({
                 groupId: input.groupId,
@@ -279,7 +380,6 @@ export const restApi = {
     },
 
     async updateNote(input: {
-        workspaceId: string;
         noteId: string;
         title?: string;
         body?: string;
@@ -287,7 +387,7 @@ export const restApi = {
         groupId?: string;
         isPinned?: boolean;
     }): Promise<Note> {
-        const data = await request<any>(`/workspaces/${input.workspaceId}/notes/${input.noteId}`, {
+        const data = await request<RawNote>(`/notes/${input.noteId}`, {
             method: 'PATCH',
             body: JSON.stringify({
                 title: input.title,
@@ -300,8 +400,8 @@ export const restApi = {
         return normalizeNote(data);
     },
 
-    async deleteNote(workspaceId: string, noteId: string): Promise<{ deleted: boolean }> {
-        return request<{ deleted: boolean }>(`/workspaces/${workspaceId}/notes/${noteId}`, {
+    async deleteNote(noteId: string): Promise<{ id: string }> {
+        return request<{ id: string }>(`/notes/${noteId}`, {
             method: 'DELETE',
         });
     },
@@ -316,7 +416,9 @@ export const restApi = {
         if (options?.offset) params.set('offset', String(options.offset));
 
         const query = params.toString();
-        const data = await request<any[]>(`/workspaces/${workspaceId}/chat${query ? `?${query}` : ''}`);
+        const data = await request<RawChatMessage[]>(
+            `/workspaces/${workspaceId}/chat/messages${query ? `?${query}` : ''}`
+        );
         return data.map(normalizeChatMessage);
     },
 
@@ -325,7 +427,7 @@ export const restApi = {
         body: string;
         messageType?: string;
     }): Promise<ChatMessage> {
-        const data = await request<any>(`/workspaces/${input.workspaceId}/chat`, {
+        const data = await request<RawChatMessage>(`/workspaces/${input.workspaceId}/chat/messages`, {
             method: 'POST',
             body: JSON.stringify({
                 body: input.body,
@@ -333,6 +435,58 @@ export const restApi = {
             }),
         });
         return normalizeChatMessage(data);
+    },
+
+    async updateChatMessage(input: {
+        workspaceId: string;
+        messageId: string;
+        body: string;
+    }): Promise<ChatMessage> {
+        const data = await request<RawChatMessage>(
+            `/workspaces/${input.workspaceId}/chat/messages/${input.messageId}`,
+            {
+            method: 'PATCH',
+            body: JSON.stringify({
+                body: input.body,
+            }),
+        });
+        return normalizeChatMessage(data);
+    },
+
+    async deleteChatMessage(input: {
+        workspaceId: string;
+        messageId: string;
+    }): Promise<{ id: string }> {
+        return request<{ id: string }>(`/workspaces/${input.workspaceId}/chat/messages/${input.messageId}`, {
+            method: 'DELETE',
+        });
+    },
+
+    async addReaction(input: {
+        workspaceId: string;
+        messageId: string;
+        emoji: string;
+    }): Promise<{ id: string; emoji: string; userId: string }> {
+        return request<{ id: string; emoji: string; userId: string }>(
+            `/workspaces/${input.workspaceId}/chat/messages/${input.messageId}/reactions`,
+            {
+                method: 'POST',
+                body: JSON.stringify({ emoji: input.emoji }),
+            }
+        );
+    },
+
+    async removeReaction(input: {
+        workspaceId: string;
+        messageId: string;
+        reactionId: string;
+    }): Promise<{ id: string }> {
+        return request<{ id: string }>(
+            `/workspaces/${input.workspaceId}/chat/messages/${input.messageId}/reactions/${input.reactionId}`,
+            {
+                method: 'DELETE',
+            }
+        );
     },
 
     // Token management

@@ -10,32 +10,43 @@ import {
     ScrollView,
     Alert,
     ActivityIndicator,
+    Modal,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '../api/restApi';
+import { haptics } from '../utils/haptics';
 import type { Note } from '../types';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { AppStackParamList } from '../navigation';
 
-type NoteEditorParams = {
-    workspaceId: string;
-    noteId: string;
-    noteTitle: string;
-};
-
-type Props = {
-    navigation: NativeStackNavigationProp<any>;
-    route: RouteProp<{ NoteEditor: NoteEditorParams }, 'NoteEditor'>;
-};
+type Props = NativeStackScreenProps<AppStackParamList, 'NoteEditor'>;
 
 export function NoteEditorScreen({ navigation, route }: Props) {
-    const { workspaceId, noteId } = route.params;
+    const insets = useSafeAreaInsets();
+    const { noteId } = route.params;
     const [note, setNote] = useState<Note | null>(null);
     const [title, setTitle] = useState('');
     const [body, setBody] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [hasChanges, setHasChanges] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    const loadNote = useCallback(async () => {
+        try {
+            const data = await api.getNote(noteId);
+            setNote(data);
+            setTitle(data.title || '');
+            setBody(data.body || '');
+        } catch {
+            Alert.alert('Error', 'Failed to load note');
+            navigation.goBack();
+        } finally {
+            setIsLoading(false);
+        }
+    }, [noteId, navigation]);
 
     useEffect(() => {
         loadNote();
@@ -44,21 +55,7 @@ export function NoteEditorScreen({ navigation, route }: Props) {
                 clearTimeout(saveTimeoutRef.current);
             }
         };
-    }, [noteId]);
-
-    const loadNote = async () => {
-        try {
-            const data = await api.getNote(noteId, workspaceId);
-            setNote(data);
-            setTitle(data.title || '');
-            setBody(data.body || '');
-        } catch (error) {
-            Alert.alert('Error', 'Failed to load note');
-            navigation.goBack();
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    }, [loadNote]);
 
     const saveNote = useCallback(async () => {
         if (!note || !hasChanges) return;
@@ -66,7 +63,6 @@ export function NoteEditorScreen({ navigation, route }: Props) {
         setIsSaving(true);
         try {
             await api.updateNote({
-                workspaceId,
                 noteId: note.id,
                 title: title.trim() || 'Untitled',
                 body,
@@ -77,7 +73,7 @@ export function NoteEditorScreen({ navigation, route }: Props) {
         } finally {
             setIsSaving(false);
         }
-    }, [note, title, body, hasChanges, workspaceId]);
+    }, [note, title, body, hasChanges]);
 
     const handleTitleChange = (text: string) => {
         setTitle(text);
@@ -108,25 +104,36 @@ export function NoteEditorScreen({ navigation, route }: Props) {
     };
 
     const handleDelete = () => {
-        Alert.alert(
-            'Delete Note',
-            'Are you sure you want to delete this note?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            await api.deleteNote(workspaceId, noteId);
-                            navigation.goBack();
-                        } catch (error) {
-                            Alert.alert('Error', 'Failed to delete note');
-                        }
-                    },
-                },
-            ]
-        );
+        setShowDeleteModal(true);
+    };
+
+    const handlePin = async () => {
+        if (!note) return;
+        haptics.light();
+        try {
+            const updated = await api.updateNote({
+                noteId: note.id,
+                isPinned: !note.isPinned,
+            });
+            haptics.success();
+            setNote(updated);
+        } catch {
+            haptics.error();
+            Alert.alert('Error', 'Failed to update pin status');
+        }
+    };
+
+    const confirmDelete = async () => {
+        setIsDeleting(true);
+        try {
+            await api.deleteNote(noteId);
+            setShowDeleteModal(false);
+            navigation.goBack();
+        } catch {
+            Alert.alert('Error', 'Failed to delete note');
+        } finally {
+            setIsDeleting(false);
+        }
     };
 
     if (isLoading) {
@@ -142,7 +149,7 @@ export function NoteEditorScreen({ navigation, route }: Props) {
             style={styles.container}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-            <View style={styles.header}>
+            <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
                 <TouchableOpacity style={styles.backButton} onPress={handleBack}>
                     <Text style={styles.backText}>← Done</Text>
                 </TouchableOpacity>
@@ -153,6 +160,9 @@ export function NoteEditorScreen({ navigation, route }: Props) {
                             <Text style={styles.unsavedText}>Unsaved</Text>
                         </View>
                     )}
+                    <TouchableOpacity style={styles.pinButton} onPress={handlePin}>
+                        <Text style={styles.pinText}>{note?.isPinned ? '📌' : '📍'}</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
                         <Text style={styles.deleteText}>🗑️</Text>
                     </TouchableOpacity>
@@ -178,6 +188,46 @@ export function NoteEditorScreen({ navigation, route }: Props) {
                     textAlignVertical="top"
                 />
             </ScrollView>
+
+            {/* Delete Confirmation Modal */}
+            <Modal
+                visible={showDeleteModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowDeleteModal(false)}
+            >
+                <View style={styles.deleteOverlay}>
+                    <View style={styles.deleteContent}>
+                        <View style={styles.deleteIconCircle}>
+                            <Text style={styles.deleteIcon}>🗑️</Text>
+                        </View>
+                        <Text style={styles.deleteTitle}>Delete Note</Text>
+                        <Text style={styles.deleteSubtitle}>
+                            Are you sure you want to delete this note? This action cannot be undone.
+                        </Text>
+
+                        <View style={styles.deleteButtons}>
+                            <TouchableOpacity
+                                style={styles.deleteCancelButton}
+                                onPress={() => setShowDeleteModal(false)}
+                            >
+                                <Text style={styles.deleteCancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.deleteConfirmButton, isDeleting && styles.buttonDisabled]}
+                                onPress={confirmDelete}
+                                disabled={isDeleting}
+                            >
+                                {isDeleting ? (
+                                    <ActivityIndicator size="small" color="#fff" />
+                                ) : (
+                                    <Text style={styles.deleteConfirmText}>Delete</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </KeyboardAvoidingView>
     );
 }
@@ -198,7 +248,6 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 20,
-        paddingTop: 60,
         paddingBottom: 12,
     },
     backButton: {
@@ -230,6 +279,12 @@ const styles = StyleSheet.create({
     deleteText: {
         fontSize: 20,
     },
+    pinButton: {
+        padding: 8,
+    },
+    pinText: {
+        fontSize: 20,
+    },
     content: {
         flex: 1,
         padding: 20,
@@ -247,5 +302,82 @@ const styles = StyleSheet.create({
         lineHeight: 24,
         minHeight: 300,
         padding: 0,
+    },
+    // Delete modal styles
+    deleteOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 24,
+    },
+    deleteContent: {
+        width: '100%',
+        backgroundColor: '#111',
+        borderRadius: 20,
+        padding: 28,
+        borderWidth: 1,
+        borderColor: '#222',
+        alignItems: 'center',
+    },
+    deleteIconCircle: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        backgroundColor: 'rgba(239, 68, 68, 0.15)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    deleteIcon: {
+        fontSize: 28,
+    },
+    deleteTitle: {
+        fontSize: 20,
+        fontWeight: '600',
+        color: '#fff',
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    deleteSubtitle: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 28,
+        textAlign: 'center',
+        lineHeight: 20,
+    },
+    deleteButtons: {
+        flexDirection: 'row',
+        gap: 12,
+        width: '100%',
+    },
+    deleteCancelButton: {
+        flex: 1,
+        padding: 14,
+        borderRadius: 12,
+        backgroundColor: '#1a1a1a',
+        borderWidth: 1,
+        borderColor: '#333',
+        alignItems: 'center',
+    },
+    deleteCancelText: {
+        color: '#888',
+        fontSize: 15,
+        fontWeight: '600',
+    },
+    deleteConfirmButton: {
+        flex: 1,
+        padding: 14,
+        borderRadius: 12,
+        backgroundColor: '#ef4444',
+        alignItems: 'center',
+    },
+    deleteConfirmText: {
+        color: '#fff',
+        fontSize: 15,
+        fontWeight: '600',
+    },
+    buttonDisabled: {
+        opacity: 0.6,
     },
 });

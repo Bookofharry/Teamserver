@@ -30,7 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
             const me = await api.getMe();
             setUser(me);
-        } catch (error) {
+        } catch {
             setUser(null);
             await api.setAuthToken(null);
         } finally {
@@ -70,6 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             await api.clearSession();
         } catch {
             // Ignore errors on logout
+        } finally {
+            await api.setAuthToken(null);
         }
         setUser(null);
     }, []);

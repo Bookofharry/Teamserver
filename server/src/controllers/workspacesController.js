@@ -81,7 +81,30 @@ export const listWorkspaces = async (req, res) => {
     return handleSupabaseError(res, workspaceError, 'Failed to load workspaces')
   }
 
-  res.json({ data: workspaceRows.map((row) => toWorkspaceResponse(mapWorkspaceRow(row))) })
+  const { data: memberCountRows, error: memberCountError } = await supabase
+    .from('workspace_members')
+    .select('workspace_id')
+    .in('workspace_id', workspaceIds)
+
+  if (memberCountError) {
+    return handleSupabaseError(res, memberCountError, 'Failed to load workspace members')
+  }
+
+  const memberCounts = (memberCountRows || []).reduce((map, row) => {
+    map.set(row.workspace_id, (map.get(row.workspace_id) || 0) + 1)
+    return map
+  }, new Map())
+
+  res.json({
+    data: workspaceRows.map((row) =>
+      toWorkspaceResponse(
+        mapWorkspaceRow({
+          ...row,
+          member_count: memberCounts.get(row.id) || 0,
+        }),
+      ),
+    ),
+  })
 }
 
 export const createWorkspace = async (req, res) => {

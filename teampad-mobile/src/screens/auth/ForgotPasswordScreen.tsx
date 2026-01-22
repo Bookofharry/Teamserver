@@ -13,11 +13,10 @@ import {
     Image,
 } from 'react-native';
 import { api } from '../../api/restApi';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { AuthStackParamList } from '../../navigation';
 
-type Props = {
-    navigation: NativeStackNavigationProp<any>;
-};
+type Props = NativeStackScreenProps<AuthStackParamList, 'ForgotPassword'>;
 
 const { width, height } = Dimensions.get('window');
 const GRID_SIZE = 40;
