@@ -168,6 +168,7 @@ export function ChatScreen({ navigation, route }: Props) {
     const flatListRef = useRef<FlatList>(null);
     const inputRef = useRef<TextInput | null>(null);
     const ablyRef = useRef<Ably.Realtime | null>(null);
+    const prevMessageCountRef = useRef(0);
     const { user } = useAuth();
 
     const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
@@ -196,6 +197,16 @@ export function ChatScreen({ navigation, route }: Props) {
     useEffect(() => {
         introAnim.start();
     }, [introAnim]);
+
+    useEffect(() => {
+        if (isLoading) return;
+        if (messages.length > prevMessageCountRef.current) {
+            requestAnimationFrame(() => {
+                flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+            });
+        }
+        prevMessageCountRef.current = messages.length;
+    }, [isLoading, messages.length]);
 
     useEffect(() => {
         let isMounted = true;

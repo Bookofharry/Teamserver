@@ -806,7 +806,8 @@ export function ChatPanel({
       return;
     }
 
-    if (!stickToBottomRef.current) return;
+    // Always jump to newest message when the list updates.
+    stickToBottomRef.current = true;
     const scrollToBottom = () => {
       container.scrollTop = container.scrollHeight;
     };
