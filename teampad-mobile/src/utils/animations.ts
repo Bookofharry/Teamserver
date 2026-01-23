@@ -1,4 +1,4 @@
-import { Animated, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { Animated, Easing, LayoutAnimation, Platform, UIManager } from 'react-native';
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -13,13 +13,24 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
  * Create a fade-in animation value
  * @returns Object with animated value and start function
  */
-export const createFadeIn = (duration = 300) => {
+export const motionTokens = {
+    duration: {
+        fast: 180,
+        base: 220,
+        slow: 260,
+    },
+    easing: Easing.out(Easing.cubic),
+    lift: 12,
+};
+
+export const createFadeIn = (duration = motionTokens.duration.base) => {
     const opacity = new Animated.Value(0);
 
     const start = (callback?: () => void) => {
         Animated.timing(opacity, {
             toValue: 1,
             duration,
+            easing: motionTokens.easing,
             useNativeDriver: true,
         }).start(callback);
     };
@@ -31,7 +42,7 @@ export const createFadeIn = (duration = 300) => {
  * Create a slide-up animation with fade
  * @returns Object with animated values and start function
  */
-export const createSlideUp = (duration = 350, distance = 30) => {
+export const createSlideUp = (duration = motionTokens.duration.base, distance = motionTokens.lift) => {
     const opacity = new Animated.Value(0);
     const translateY = new Animated.Value(distance);
 
@@ -40,11 +51,13 @@ export const createSlideUp = (duration = 350, distance = 30) => {
             Animated.timing(opacity, {
                 toValue: 1,
                 duration,
+                easing: motionTokens.easing,
                 useNativeDriver: true,
             }),
             Animated.timing(translateY, {
                 toValue: 0,
                 duration,
+                easing: motionTokens.easing,
                 useNativeDriver: true,
             }),
         ]).start(callback);
@@ -57,12 +70,14 @@ export const createSlideUp = (duration = 350, distance = 30) => {
  * Create a scale animation (for press effects)
  * @returns Object with animated value and press handlers
  */
-export const createScalePress = (minScale = 0.95) => {
+export const createScalePress = (minScale = 0.96) => {
     const scale = new Animated.Value(1);
 
     const onPressIn = () => {
         Animated.spring(scale, {
             toValue: minScale,
+            speed: 18,
+            bounciness: 4,
             useNativeDriver: true,
         }).start();
     };
@@ -70,6 +85,8 @@ export const createScalePress = (minScale = 0.95) => {
     const onPressOut = () => {
         Animated.spring(scale, {
             toValue: 1,
+            speed: 18,
+            bounciness: 4,
             useNativeDriver: true,
         }).start();
     };
@@ -83,7 +100,7 @@ export const createScalePress = (minScale = 0.95) => {
  * @param staggerDelay Delay between each item
  * @returns Array of animated values and start function
  */
-export const createStaggeredList = (count: number, staggerDelay = 50) => {
+export const createStaggeredList = (count: number, staggerDelay = 40) => {
     const animations = Array.from({ length: count }, () => ({
         opacity: new Animated.Value(0),
         translateY: new Animated.Value(20),
@@ -96,12 +113,14 @@ export const createStaggeredList = (count: number, staggerDelay = 50) => {
                 Animated.parallel([
                     Animated.timing(anim.opacity, {
                         toValue: 1,
-                        duration: 250,
+                        duration: motionTokens.duration.fast,
+                        easing: motionTokens.easing,
                         useNativeDriver: true,
                     }),
                     Animated.timing(anim.translateY, {
                         toValue: 0,
-                        duration: 250,
+                        duration: motionTokens.duration.fast,
+                        easing: motionTokens.easing,
                         useNativeDriver: true,
                     }),
                 ]),
@@ -136,16 +155,16 @@ export const animationPresets = {
         opacity: {
             from: 0,
             to: 1,
-            duration: 300,
+            duration: motionTokens.duration.base,
         },
     },
     slideUp: {
-        opacity: { from: 0, to: 1, duration: 350 },
-        translateY: { from: 30, to: 0, duration: 350 },
+        opacity: { from: 0, to: 1, duration: motionTokens.duration.base },
+        translateY: { from: motionTokens.lift, to: 0, duration: motionTokens.duration.base },
     },
     scaleIn: {
-        scale: { from: 0.9, to: 1, duration: 200 },
-        opacity: { from: 0, to: 1, duration: 200 },
+        scale: { from: 0.96, to: 1, duration: motionTokens.duration.fast },
+        opacity: { from: 0, to: 1, duration: motionTokens.duration.fast },
     },
 };
 

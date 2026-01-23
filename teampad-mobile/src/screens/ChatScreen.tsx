@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useState, useRef, useCallback } from 'react';
+import React, { memo, useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
     View,
     Text,
@@ -13,15 +13,17 @@ import {
     RefreshControl,
     Modal,
     Animated,
+    InteractionManager,
 } from 'react-native';
 import Ably from 'ably';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '../api/restApi';
 import { useAuth } from '../context/AuthContext';
 import { haptics } from '../utils/haptics';
+import { listPerfConfig } from '../utils/perf';
 import { BackgroundGlow } from '../components/BackgroundGlow';
 import { createSlideUp, getAnimatedStyle } from '../utils/animations';
-import type { ChatMessage } from '../types';
+import type { ChatMessage, ChatReaction } from '../types';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AppStackParamList } from '../navigation';
 
@@ -33,6 +35,20 @@ type ChatMessageRowProps = {
     onLongPress: (message: ChatMessage) => void;
     onReactionTap: (message: ChatMessage, emoji: string) => void;
 };
+
+type ChatMessagesListProps = {
+    messages: ChatMessage[];
+    userId?: string;
+    onLongPress: (message: ChatMessage) => void;
+    onReactionTap: (message: ChatMessage, emoji: string) => void;
+    onRefresh: () => void;
+    refreshing: boolean;
+    onFocusInput: () => void;
+};
+
+const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
+const TYPING_TIMEOUT_MS = 3000;
+const TYPING_THROTTLE_MS = 1500;
 
 const groupReactions = (
     reactions: ChatMessage['reactions'],
@@ -79,6 +95,24 @@ const normalizeRealtimeMessage = (message: ChatMessage): ChatMessage => {
     };
 };
 
+const normalizeRealtimeReaction = (reaction: ChatReaction): ChatReaction => ({
+    ...reaction,
+    createdAt: reaction.createdAt instanceof Date
+        ? reaction.createdAt
+        : new Date(reaction.createdAt as unknown as string),
+});
+
+const dedupeMessages = (items: ChatMessage[]) => {
+    const seen = new Set<string>();
+    const result: ChatMessage[] = [];
+    for (const item of items) {
+        if (!item?.id || seen.has(item.id)) continue;
+        seen.add(item.id);
+        result.push(item);
+    }
+    return result;
+};
+
 const ChatMessageRow = memo(function ChatMessageRow({
     item,
     userId,
@@ -90,6 +124,10 @@ const ChatMessageRow = memo(function ChatMessageRow({
     const isSystemMessage = item.messageType === 'system' ||
         item.body?.toLowerCase().includes('joined') ||
         item.body?.toLowerCase().includes('left');
+    const groupedReactions = useMemo(
+        () => groupReactions(item.reactions, userId),
+        [item.reactions, userId],
+    );
 
     if (isSystemMessage) {
         return (
@@ -130,7 +168,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
                 </View>
                 {item.reactions && item.reactions.length > 0 && !isDeleted && (
                     <View style={styles.reactionsContainer}>
-                        {Object.entries(groupReactions(item.reactions, userId)).map(([emoji, data]) => (
+                        {Object.entries(groupedReactions).map(([emoji, data]) => (
                             <TouchableOpacity
                                 key={emoji}
                                 style={[styles.reactionBadge, data.userReacted && styles.reactionBadgeActive]}
@@ -146,6 +184,144 @@ const ChatMessageRow = memo(function ChatMessageRow({
                 )}
             </View>
         </TouchableOpacity>
+    );
+});
+
+const ChatMessagesList = memo(React.forwardRef<FlatList, ChatMessagesListProps>(
+    function ChatMessagesList(
+        { messages, userId, onLongPress, onReactionTap, onRefresh, refreshing, onFocusInput },
+        ref
+    ) {
+        const {
+            initialNumToRender,
+            windowSize,
+            maxToRenderPerBatch,
+            updateCellsBatchingPeriod,
+        } = listPerfConfig;
+        const renderMessage = useCallback(
+            ({ item }: { item: ChatMessage }) => (
+                <ChatMessageRow
+                    item={item}
+                    userId={userId}
+                    onLongPress={onLongPress}
+                    onReactionTap={onReactionTap}
+                />
+            ),
+            [onLongPress, onReactionTap, userId],
+        );
+
+        return (
+            <FlatList
+                ref={ref}
+                data={messages}
+                keyExtractor={(item) => item.id}
+                renderItem={renderMessage}
+                inverted
+                maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+                contentContainerStyle={styles.messagesList}
+                initialNumToRender={initialNumToRender}
+                windowSize={windowSize}
+                maxToRenderPerBatch={maxToRenderPerBatch}
+                updateCellsBatchingPeriod={updateCellsBatchingPeriod}
+                removeClippedSubviews
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor="#3b82f6"
+                    />
+                }
+                ListEmptyComponent={
+                    <View style={styles.empty}>
+                        <View style={styles.emptyCard}>
+                            <Text style={styles.emptyTitle}>No messages yet</Text>
+                            <Text style={styles.emptyText}>Start the conversation!</Text>
+                            <TouchableOpacity
+                                style={styles.emptyPrimaryButton}
+                                onPress={onFocusInput}
+                            >
+                                <Text style={styles.emptyPrimaryText}>Send first message</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                }
+            />
+        );
+    }
+));
+
+const TypingDots = memo(function TypingDots() {
+    const dot1 = useRef(new Animated.Value(0.3)).current;
+    const dot2 = useRef(new Animated.Value(0.3)).current;
+    const dot3 = useRef(new Animated.Value(0.3)).current;
+
+    useEffect(() => {
+        const makePulse = (value: Animated.Value, delay: number) =>
+            Animated.loop(
+                Animated.sequence([
+                    Animated.delay(delay),
+                    Animated.timing(value, {
+                        toValue: 1,
+                        duration: 350,
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(value, {
+                        toValue: 0.3,
+                        duration: 350,
+                        useNativeDriver: true,
+                    }),
+                    Animated.delay(200),
+                ]),
+            );
+
+        const a1 = makePulse(dot1, 0);
+        const a2 = makePulse(dot2, 120);
+        const a3 = makePulse(dot3, 240);
+        a1.start();
+        a2.start();
+        a3.start();
+        return () => {
+            a1.stop();
+            a2.stop();
+            a3.stop();
+        };
+    }, [dot1, dot2, dot3]);
+
+    return (
+        <View style={styles.typingDots}>
+            <Animated.View style={[styles.typingDot, { opacity: dot1 }]} />
+            <Animated.View style={[styles.typingDot, { opacity: dot2 }]} />
+            <Animated.View style={[styles.typingDot, { opacity: dot3 }]} />
+        </View>
+    );
+});
+
+const TypingIndicator = memo(function TypingIndicator({
+    users,
+}: {
+    users: Array<{ name: string; avatar?: string | null }>;
+}) {
+    if (!users.length) return null;
+    const display = users.slice(0, 2);
+    const names = display.map((user) => user.name);
+    const suffix = users.length > 2 ? ' and others' : '';
+    return (
+        <View style={styles.typingRow}>
+            <View style={styles.typingAvatars}>
+                {display.map((user, index) => (
+                    <View key={`${user.name}-${index}`} style={styles.typingAvatar}>
+                        <Text style={styles.typingAvatarText}>
+                            {user.name.charAt(0).toUpperCase()}
+                        </Text>
+                    </View>
+                ))}
+            </View>
+            <Text style={styles.typingText}>
+                {names.join(', ')}
+                {suffix} typing
+            </Text>
+            <TypingDots />
+        </View>
     );
 });
 
@@ -165,13 +341,16 @@ export function ChatScreen({ navigation, route }: Props) {
     const [editText, setEditText] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [typingUsers, setTypingUsers] = useState<Record<string, { name: string; avatar?: string | null; timestamp: number }>>({});
     const flatListRef = useRef<FlatList>(null);
     const inputRef = useRef<TextInput | null>(null);
     const ablyRef = useRef<Ably.Realtime | null>(null);
     const prevMessageCountRef = useRef(0);
+    const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const channelRef = useRef<Ably.Types.RealtimeChannel | null>(null);
+    const lastTypingSentRef = useRef(0);
     const { user } = useAuth();
-
-    const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
 
     const loadMessages = useCallback(async (showRefresh = false) => {
         if (showRefresh) setIsRefreshing(true);
@@ -180,7 +359,7 @@ export function ChatScreen({ navigation, route }: Props) {
             const sorted = [...data].sort(
                 (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
             );
-            setMessages(sorted);
+            setMessages(dedupeMessages(sorted));
         } catch {
             Alert.alert('Error', 'Failed to load messages');
         } finally {
@@ -190,8 +369,9 @@ export function ChatScreen({ navigation, route }: Props) {
     }, [workspaceId]);
 
     useEffect(() => {
-        loadMessages();
+        const task = InteractionManager.runAfterInteractions(loadMessages);
         navigation.setOptions({ title: workspaceName || 'Chat' });
+        return () => task.cancel();
     }, [loadMessages, navigation, workspaceName]);
 
     useEffect(() => {
@@ -200,13 +380,31 @@ export function ChatScreen({ navigation, route }: Props) {
 
     useEffect(() => {
         if (isLoading) return;
-        if (messages.length > prevMessageCountRef.current) {
+        if (messages.length > prevMessageCountRef.current && !searchQuery.trim()) {
             requestAnimationFrame(() => {
                 flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
             });
         }
         prevMessageCountRef.current = messages.length;
-    }, [isLoading, messages.length]);
+    }, [isLoading, messages.length, searchQuery]);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const now = Date.now();
+            setTypingUsers((prev) => {
+                let changed = false;
+                const next = { ...prev };
+                Object.keys(next).forEach((userId) => {
+                    if (now - next[userId].timestamp > TYPING_TIMEOUT_MS) {
+                        delete next[userId];
+                        changed = true;
+                    }
+                });
+                return changed ? next : prev;
+            });
+        }, 1000);
+        return () => clearInterval(interval);
+    }, []);
 
     useEffect(() => {
         let isMounted = true;
@@ -239,15 +437,20 @@ export function ChatScreen({ navigation, route }: Props) {
                 client.connection.on(connectionListener);
 
                 channel = client.channels.get(`workspace:${workspaceId}`);
+                channelRef.current = channel;
                 channel.subscribe('chat-event', (message) => {
                     if (!isMounted) return;
-                    const payload = message.data as { type?: string; message?: ChatMessage };
+                    const payload = message.data as {
+                        type?: string;
+                        message?: ChatMessage;
+                        reaction?: ChatReaction;
+                        userId?: string;
+                        name?: string;
+                        avatar?: string | null;
+                    };
                     if (payload?.type === 'message.created' && payload.message?.id) {
                         const normalized = normalizeRealtimeMessage(payload.message);
-                        setMessages((prev) => {
-                            const exists = prev.some((m) => m.id === normalized.id);
-                            return exists ? prev : [normalized, ...prev];
-                        });
+                        setMessages((prev) => dedupeMessages([normalized, ...prev]));
                     }
                     if (payload?.type === 'message.updated' && payload.message?.id) {
                         const normalized = normalizeRealtimeMessage(payload.message);
@@ -259,9 +462,41 @@ export function ChatScreen({ navigation, route }: Props) {
                             m.id === normalized.id ? normalized : m
                         ));
                     }
+                    if (payload?.type === 'reaction.created' && payload.reaction?.id) {
+                        const reaction = normalizeRealtimeReaction(payload.reaction);
+                        setMessages((prev) =>
+                            prev.map((m) =>
+                                m.id === reaction.messageId
+                                    ? m.reactions?.some((r) => r.id === reaction.id)
+                                        ? m
+                                        : { ...m, reactions: [...(m.reactions || []), reaction] }
+                                    : m
+                            )
+                        );
+                    }
+                    if (payload?.type === 'reaction.deleted' && payload.reaction?.id) {
+                        setMessages((prev) =>
+                            prev.map((m) =>
+                                m.id === payload.reaction?.messageId
+                                    ? { ...m, reactions: (m.reactions || []).filter((r) => r.id !== payload.reaction?.id) }
+                                    : m
+                            )
+                        );
+                    }
                     if (payload?.type === 'reaction.updated' && payload.message?.id) {
                         const normalized = normalizeRealtimeMessage(payload.message);
                         setMessages((prev) => prev.map((m) => (m.id === normalized.id ? normalized : m)));
+                    }
+                    if (payload?.type === 'typing' && payload.userId && payload.name) {
+                        if (payload.userId === user?.id) return;
+                        setTypingUsers((prev) => ({
+                            ...prev,
+                            [payload.userId as string]: {
+                                name: payload.name as string,
+                                avatar: payload.avatar ?? null,
+                                timestamp: Date.now(),
+                            },
+                        }));
                     }
                 });
             } catch {
@@ -276,6 +511,7 @@ export function ChatScreen({ navigation, route }: Props) {
             if (channel) {
                 channel.unsubscribe();
             }
+            channelRef.current = null;
             if (ablyRef.current) {
                 if (connectionListener) {
                     ablyRef.current.connection.off(connectionListener);
@@ -285,6 +521,28 @@ export function ChatScreen({ navigation, route }: Props) {
             }
         };
     }, [workspaceId, user?.id]);
+
+    useEffect(() => {
+        if (isLoading) return;
+        if (realtimeStatus === 'connected') {
+            if (pollTimerRef.current) {
+                clearInterval(pollTimerRef.current);
+                pollTimerRef.current = null;
+            }
+            void loadMessages();
+            return;
+        }
+        if (pollTimerRef.current) return;
+        pollTimerRef.current = setInterval(() => {
+            void loadMessages();
+        }, 15000);
+        return () => {
+            if (pollTimerRef.current) {
+                clearInterval(pollTimerRef.current);
+                pollTimerRef.current = null;
+            }
+        };
+    }, [isLoading, loadMessages, realtimeStatus]);
 
     const handleSend = async () => {
         const text = messageText.trim();
@@ -298,7 +556,7 @@ export function ChatScreen({ navigation, route }: Props) {
                 workspaceId,
                 body: text,
             });
-            setMessages((prev) => [newMessage, ...prev]);
+            setMessages((prev) => dedupeMessages([newMessage, ...prev]));
         } catch {
             Alert.alert('Error', 'Failed to send message');
             setMessageText(text);
@@ -306,6 +564,21 @@ export function ChatScreen({ navigation, route }: Props) {
             setIsSending(false);
         }
     };
+
+    const sendTyping = useCallback(() => {
+        if (realtimeStatus !== 'connected') return;
+        const channel = channelRef.current;
+        if (!channel || !user?.id) return;
+        const now = Date.now();
+        if (now - lastTypingSentRef.current < TYPING_THROTTLE_MS) return;
+        lastTypingSentRef.current = now;
+        channel.publish('chat-event', {
+            type: 'typing',
+            userId: user.id,
+            name: user.name || 'Teammate',
+            avatar: user.avatar ?? null,
+        });
+    }, [realtimeStatus, user?.avatar, user?.id, user?.name]);
 
     const handleMessageLongPress = useCallback((message: ChatMessage) => {
         // Don't allow actions on deleted messages
@@ -429,17 +702,11 @@ export function ChatScreen({ navigation, route }: Props) {
         }
     };
 
-    const renderMessage = useCallback(
-        ({ item }: { item: ChatMessage }) => (
-            <ChatMessageRow
-                item={item}
-                userId={user?.id}
-                onLongPress={handleMessageLongPress}
-                onReactionTap={handleReactionTap}
-            />
-        ),
-        [handleMessageLongPress, handleReactionTap, user?.id],
-    );
+    const filteredMessages = useMemo(() => {
+        if (!searchQuery.trim()) return messages;
+        const query = searchQuery.trim().toLowerCase();
+        return messages.filter((message) => message.body?.toLowerCase().includes(query));
+    }, [messages, searchQuery]);
 
     if (isLoading) {
         return (
@@ -467,49 +734,62 @@ export function ChatScreen({ navigation, route }: Props) {
                         </View>
                         <View style={styles.headerInfo}>
                             <Text style={styles.headerTitle} numberOfLines={1}>{workspaceName}</Text>
-                            <Text style={styles.headerSubtitle}>
-                                {realtimeStatus === 'connected' ? 'Live' : 'Team Chat'}
+                            <Text style={styles.headerSubtitle}>Team Chat</Text>
+                        </View>
+                    </View>
+                    <View style={styles.headerRight}>
+                        <View style={styles.statusBadge}>
+                            <View
+                                style={[
+                                    styles.statusDot,
+                                    realtimeStatus === 'connected'
+                                        ? styles.statusDotLive
+                                        : realtimeStatus === 'connecting'
+                                            ? styles.statusDotConnecting
+                                            : styles.statusDotOffline,
+                                ]}
+                            />
+                            <Text style={styles.statusText}>
+                                {realtimeStatus === 'connected'
+                                    ? 'Live'
+                                    : realtimeStatus === 'connecting'
+                                        ? 'Syncing'
+                                        : 'Offline'}
                             </Text>
                         </View>
                     </View>
-                    <View style={styles.headerRight} />
                 </View>
 
-                <FlatList
+                <View style={styles.searchRow}>
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="Search messages..."
+                        placeholderTextColor="#666"
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        clearButtonMode="while-editing"
+                    />
+                </View>
+
+                <ChatMessagesList
                     ref={flatListRef}
-                    data={messages}
-                    keyExtractor={(item) => item.id}
-                    renderItem={renderMessage}
-                    inverted
-                    maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-                    contentContainerStyle={styles.messagesList}
-                    initialNumToRender={12}
-                    windowSize={9}
-                    maxToRenderPerBatch={10}
-                    updateCellsBatchingPeriod={50}
-                    removeClippedSubviews
-                    refreshControl={
-                        <RefreshControl
-                            refreshing={isRefreshing}
-                            onRefresh={() => loadMessages(true)}
-                            tintColor="#3b82f6"
-                        />
-                    }
-                    ListEmptyComponent={
-                        <View style={styles.empty}>
-                            <View style={styles.emptyCard}>
-                                <Text style={styles.emptyTitle}>No messages yet</Text>
-                                <Text style={styles.emptyText}>Start the conversation!</Text>
-                                <TouchableOpacity
-                                    style={styles.emptyPrimaryButton}
-                                    onPress={() => inputRef.current?.focus()}
-                                >
-                                    <Text style={styles.emptyPrimaryText}>Send first message</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    }
+                    messages={filteredMessages}
+                    userId={user?.id}
+                    onLongPress={handleMessageLongPress}
+                    onReactionTap={handleReactionTap}
+                    onRefresh={() => loadMessages(true)}
+                    refreshing={isRefreshing}
+                    onFocusInput={() => inputRef.current?.focus()}
                 />
+
+                {Object.keys(typingUsers).length > 0 && (
+                    <TypingIndicator
+                        users={Object.values(typingUsers).map((entry) => ({
+                            name: entry.name,
+                            avatar: entry.avatar,
+                        }))}
+                    />
+                )}
 
                 <View style={styles.inputContainer}>
                     <TextInput
@@ -518,7 +798,10 @@ export function ChatScreen({ navigation, route }: Props) {
                         placeholder="Type a message..."
                         placeholderTextColor="#666"
                         value={messageText}
-                        onChangeText={setMessageText}
+                        onChangeText={(value) => {
+                            setMessageText(value);
+                            sendTyping();
+                        }}
                         multiline
                         maxLength={2000}
                     />
@@ -733,7 +1016,102 @@ const styles = StyleSheet.create({
         marginTop: 1,
     },
     headerRight: {
-        width: 40,
+        width: 72,
+        alignItems: 'flex-end',
+    },
+    statusBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#101010',
+        borderRadius: 12,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderWidth: 1,
+        borderColor: '#262626',
+    },
+    statusDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#a3a3a3',
+    },
+    statusDotLive: {
+        backgroundColor: '#22c55e',
+    },
+    statusDotConnecting: {
+        backgroundColor: '#f59e0b',
+    },
+    statusDotOffline: {
+        backgroundColor: '#ef4444',
+    },
+    statusText: {
+        color: '#e5e7eb',
+        fontSize: 11,
+        fontWeight: '600',
+    },
+    searchRow: {
+        paddingHorizontal: 16,
+        paddingTop: 12,
+        paddingBottom: 4,
+        backgroundColor: '#0a0a0a',
+    },
+    searchInput: {
+        backgroundColor: '#141414',
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        fontSize: 14,
+        color: '#fff',
+        borderWidth: 1,
+        borderColor: '#262626',
+    },
+    typingRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingHorizontal: 16,
+        paddingTop: 6,
+        paddingBottom: 4,
+        backgroundColor: '#0a0a0a',
+    },
+    typingAvatars: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginRight: 2,
+    },
+    typingAvatar: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        backgroundColor: '#1f2937',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#111827',
+        marginRight: -6,
+    },
+    typingAvatarText: {
+        color: '#e5e7eb',
+        fontSize: 10,
+        fontWeight: '700',
+    },
+    typingText: {
+        color: '#9aa0a6',
+        fontSize: 12,
+        fontStyle: 'italic',
+    },
+    typingDots: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginLeft: 6,
+    },
+    typingDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: '#9aa0a6',
     },
     messagesList: {
         padding: 16,

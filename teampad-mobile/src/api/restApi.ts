@@ -11,6 +11,8 @@ import type {
     ChatAttachment,
     ChatReaction,
     ChatMention,
+    WorkspaceInvite,
+    WorkspaceInviter,
 } from '../types';
 
 type ApiResponse<T> = { data: T };
@@ -51,6 +53,24 @@ type RawWorkspaceMember = {
     user?: Partial<User>;
     role: UserRole;
     joinedAt?: string | Date;
+};
+
+type RawInvite = {
+    id: string;
+    workspaceId?: string;
+    workspace_id?: string;
+    workspaceName?: string;
+    workspace_name?: string;
+    email: string;
+    role: UserRole;
+    token: string;
+    expiresAt?: string;
+    expires_at?: string;
+    createdAt?: string;
+    created_at?: string;
+    createdBy?: string;
+    created_by?: string;
+    inviter?: WorkspaceInviter;
 };
 
 type RawGroup = Omit<Group, 'noteCount'> & { noteCount?: number };
@@ -180,6 +200,18 @@ const normalizeGroup = (group: RawGroup): Group => ({
     noteCount: group.noteCount ?? 0,
 });
 
+const normalizeInvite = (invite: RawInvite): WorkspaceInvite => ({
+    id: invite.id,
+    workspaceId: invite.workspaceId ?? invite.workspace_id ?? '',
+    workspaceName: invite.workspaceName ?? invite.workspace_name,
+    email: invite.email,
+    role: invite.role,
+    token: invite.token,
+    expiresAt: new Date(invite.expiresAt ?? invite.expires_at ?? new Date().toISOString()),
+    createdAt: invite.createdAt ? new Date(invite.createdAt) : invite.created_at ? new Date(invite.created_at) : undefined,
+    createdBy: invite.createdBy ?? invite.created_by,
+    inviter: invite.inviter,
+});
 const normalizeNote = (note: RawNote): Note => ({
     ...note,
     body: note.body ?? '',
@@ -333,6 +365,33 @@ export const restApi = {
         return normalizeWorkspace(data);
     },
 
+    async listMyInvites(): Promise<WorkspaceInvite[]> {
+        const data = await request<RawInvite[]>('/invites');
+        return data.map(normalizeInvite);
+    },
+
+    async createInvite(input: { workspaceId: string; email: string; role?: UserRole }): Promise<WorkspaceInvite> {
+        const data = await request<RawInvite>(`/workspaces/${input.workspaceId}/invites`, {
+            method: 'POST',
+            body: JSON.stringify({ email: input.email, role: input.role }),
+        });
+        return normalizeInvite(data);
+    },
+
+    async acceptInvite(token: string): Promise<{ workspaceId: string; member: { id: string; userId: string; role: UserRole } }> {
+        return request<{ workspaceId: string; member: { id: string; userId: string; role: UserRole } }>(
+            `/invites/${token}/accept`,
+            { method: 'POST' }
+        );
+    },
+
+    async declineInvite(token: string): Promise<{ workspaceId: string; email: string }> {
+        return request<{ workspaceId: string; email: string }>(
+            `/invites/${token}/decline`,
+            { method: 'POST' }
+        );
+    },
+
     // Groups
     async getGroups(workspaceId: string): Promise<Group[]> {
         const data = await request<RawGroup[]>(`/workspaces/${workspaceId}/groups`);
@@ -444,10 +503,27 @@ export const restApi = {
                 ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
             },
         });
-        if (!res.ok) {
-            throw new Error('Failed to fetch Ably token');
+        const text = await res.text();
+        let parsed: unknown = null;
+        try {
+            parsed = text ? JSON.parse(text) : null;
+        } catch {
+            parsed = null;
         }
-        return res.json() as Promise<AblyTokenRequest>;
+        if (!res.ok) {
+            const message = parsed && typeof parsed === 'object' && 'error' in parsed
+                ? (parsed as { error?: { message?: string } }).error?.message
+                : res.statusText || 'Failed to fetch Ably token';
+            throw new Error(message || 'Failed to fetch Ably token');
+        }
+        if (!parsed || typeof parsed !== 'object') {
+            throw new Error('Unexpected response');
+        }
+        if ('error' in parsed) {
+            const message = (parsed as { error?: { message?: string } }).error?.message;
+            throw new Error(message || 'Failed to fetch Ably token');
+        }
+        return parsed as AblyTokenRequest;
     },
 
     async createChatMessage(input: {

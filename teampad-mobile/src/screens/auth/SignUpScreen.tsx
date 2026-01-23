@@ -61,14 +61,17 @@ export function SignUpScreen({ navigation }: Props) {
         setShowErrorModal(true);
     };
 
+    const sanitizeSignupError = (message: string) => {
+        const lowered = message.toLowerCase();
+        if (lowered.includes('expected string to have') || lowered.includes('password')) {
+            return 'Password not accepted. Try a stronger password.';
+        }
+        return message;
+    };
+
     const handleSignUp = async () => {
         if (!name.trim() || !email.trim() || !password.trim()) {
             showError('Please fill in all fields.');
-            return;
-        }
-
-        if (password.length < 8) {
-            showError('Password must be at least 8 characters.');
             return;
         }
 
@@ -82,7 +85,8 @@ export function SignUpScreen({ navigation }: Props) {
                 password,
             });
         } catch (error) {
-            showError(error instanceof Error ? error.message : 'Please try again.');
+            const raw = error instanceof Error ? error.message : 'Please try again.';
+            showError(sanitizeSignupError(raw));
         } finally {
             setIsLoading(false);
         }
@@ -132,7 +136,7 @@ export function SignUpScreen({ navigation }: Props) {
                     />
                     <TextInput
                         style={styles.input}
-                        placeholder="Password (8+ characters)"
+                        placeholder="Password"
                         placeholderTextColor="#666"
                         secureTextEntry
                         value={password}

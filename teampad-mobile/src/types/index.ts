@@ -32,6 +32,26 @@ export interface WorkspaceMember {
     joinedAt: Date;
 }
 
+export interface WorkspaceInviter {
+    id: string;
+    name: string;
+    email: string;
+    avatar?: string | null;
+}
+
+export interface WorkspaceInvite {
+    id: string;
+    workspaceId: string;
+    workspaceName?: string;
+    email: string;
+    role: UserRole;
+    token: string;
+    expiresAt: Date;
+    createdAt?: Date;
+    createdBy?: string;
+    inviter?: WorkspaceInviter;
+}
+
 export interface Group {
     id: string;
     name: string;

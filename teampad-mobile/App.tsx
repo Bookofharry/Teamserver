@@ -2,6 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './src/context/AuthContext';
 import { RootNavigator } from './src/navigation';
+import { PerfOverlay } from './src/components/PerfOverlay';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -18,6 +19,7 @@ export default function App() {
       <AuthProvider>
         <StatusBar style="light" />
         <RootNavigator />
+        <PerfOverlay />
       </AuthProvider>
     </QueryClientProvider>
   );

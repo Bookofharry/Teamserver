@@ -635,6 +635,9 @@ export const createChatReaction = async (req, res) => {
 
   const data = mapReactionRow(reactionRow)
   res.status(201).json({ data })
+
+  publishChatRoomEvent(`workspace:${workspaceId}`, { type: 'reaction.created', reaction: data })
+    .catch(() => { })
 }
 
 export const deleteChatReaction = async (req, res) => {
@@ -675,7 +678,11 @@ export const deleteChatReaction = async (req, res) => {
     return handleSupabaseError(res, deleteError, 'Failed to delete reaction')
   }
 
-  res.json({ data: { id: reactionRow.id } })
+  const response = { id: reactionRow.id, messageId }
+  res.json({ data: response })
+
+  publishChatRoomEvent(`workspace:${workspaceId}`, { type: 'reaction.deleted', reaction: response })
+    .catch(() => { })
 }
 
 export const createChatUpload = async (req, res) => {

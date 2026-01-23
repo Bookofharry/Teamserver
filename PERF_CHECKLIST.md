@@ -2,6 +2,14 @@
 
 Goal: "lightweight and silk" UI/UX. Use this checklist to keep payloads small, renders calm, and interactions fast.
 
+## 0) Quick QA (mobile regression)
+- Auth: login, signup, OTP, forgot password (success + error modals)
+- Navigation: Workspaces → Notes → Chat → back
+- Realtime: send message + reaction both directions (web ↔ mobile)
+- Offline: disable network → Chat shows "Offline" → reconnect → list refresh
+- Lists: fast scroll Workspaces/Notes/Chat without stutter or warnings
+- Perf overlay: `EXPO_PUBLIC_PERF_OVERLAY=true` shows FPS; stays >50 on main screens
+
 ## 1) Baseline (measure first)
 - Network: note the slowest endpoints and biggest JSON responses.
 - UI: use React Profiler to find components with heavy re-renders.
@@ -61,4 +69,3 @@ Every new feature should pass:
 - Payload check
 - Render check
 - Interaction check
-

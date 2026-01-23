@@ -8,7 +8,6 @@ import {
     KeyboardAvoidingView,
     Platform,
     ActivityIndicator,
-    Alert,
     Dimensions,
     Image,
     Modal,
@@ -63,6 +62,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
     const [isLoading, setIsLoading] = useState(false);
     const [showErrorModal, setShowErrorModal] = useState(false);
     const [errorMessage, setErrorMessage] = useState('Please try again.');
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
 
     const showError = (message: string) => {
         setErrorMessage(message);
@@ -82,11 +82,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
         setIsLoading(true);
         try {
             await api.forgotPassword(email.trim());
-            Alert.alert(
-                'Reset Link Sent',
-                'Check your email for a link to reset your password',
-                [{ text: 'OK', onPress: () => navigation.goBack() }]
-            );
+            setShowSuccessModal(true);
         } catch (error) {
             showError(error instanceof Error ? error.message : 'Please try again.');
         } finally {
@@ -164,6 +160,36 @@ export function ForgotPasswordScreen({ navigation }: Props) {
                                 onPress={() => setShowErrorModal(false)}
                             >
                                 <Text style={styles.errorPrimaryText}>Try again</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            <Modal
+                visible={showSuccessModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowSuccessModal(false)}
+            >
+                <View style={styles.successOverlay}>
+                    <View style={styles.successContent}>
+                        <View style={styles.successIconCircle}>
+                            <Text style={styles.successIcon}>📨</Text>
+                        </View>
+                        <Text style={styles.successTitle}>Reset link sent</Text>
+                        <Text style={styles.successSubtitle}>
+                            Check your email for a secure link to reset your password.
+                        </Text>
+                        <View style={styles.successButtons}>
+                            <TouchableOpacity
+                                style={styles.successPrimaryButton}
+                                onPress={() => {
+                                    setShowSuccessModal(false);
+                                    navigation.goBack();
+                                }}
+                            >
+                                <Text style={styles.successPrimaryText}>Back to sign in</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -307,6 +333,63 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     errorPrimaryText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    successOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 24,
+    },
+    successContent: {
+        width: '100%',
+        backgroundColor: '#0b1220',
+        borderRadius: 20,
+        padding: 28,
+        borderWidth: 1,
+        borderColor: '#1e293b',
+        alignItems: 'center',
+    },
+    successIconCircle: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    successIcon: {
+        fontSize: 24,
+    },
+    successTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#fff',
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    successSubtitle: {
+        fontSize: 14,
+        color: '#94a3b8',
+        marginBottom: 24,
+        textAlign: 'center',
+        lineHeight: 20,
+    },
+    successButtons: {
+        width: '100%',
+    },
+    successPrimaryButton: {
+        width: '100%',
+        padding: 14,
+        borderRadius: 12,
+        backgroundColor: '#3b82f6',
+        alignItems: 'center',
+    },
+    successPrimaryText: {
         color: '#fff',
         fontSize: 14,
         fontWeight: '600',

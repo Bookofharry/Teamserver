@@ -55,6 +55,14 @@ export function LoginScreen({ navigation }: Props) {
     const [errorMessage, setErrorMessage] = useState('Invalid email or password.');
     const { login } = useAuth();
 
+    const sanitizeLoginError = (message: string) => {
+        const lowered = message.toLowerCase();
+        if (lowered.includes('expected string to have') || lowered.includes('password')) {
+            return 'Invalid credentials. Please try again.';
+        }
+        return message;
+    };
+
     const handleLogin = async () => {
         if (!email.trim() || !password.trim()) {
             setErrorMessage('Please enter email and password.');
@@ -73,7 +81,8 @@ export function LoginScreen({ navigation }: Props) {
                 });
             }
         } catch (error) {
-            setErrorMessage(error instanceof Error ? error.message : 'Please try again.');
+            const raw = error instanceof Error ? error.message : 'Please try again.';
+            setErrorMessage(sanitizeLoginError(raw));
             setShowErrorModal(true);
         } finally {
             setIsLoading(false);

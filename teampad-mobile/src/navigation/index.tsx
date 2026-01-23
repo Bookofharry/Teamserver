@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { StyleSheet, View } from 'react-native';
+import { Easing, StyleSheet, View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as SplashScreen from 'expo-splash-screen';
 import { useAuth } from '../context/AuthContext';
@@ -20,6 +20,7 @@ import { ChatScreen } from '../screens/ChatScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { OnboardingScreen } from '../screens/OnboardingScreen';
+import { InvitesScreen } from '../screens/InvitesScreen';
 
 // Type definitions for navigation
 export type AuthStackParamList = {
@@ -38,6 +39,7 @@ export type AuthStackParamList = {
 export type AppStackParamList = {
     Onboarding: undefined;
     Workspaces: undefined;
+    Invites: undefined;
     Notes: { workspaceId: string; workspaceName: string };
     NoteEditor: { workspaceId: string; noteId: string; noteTitle: string };
     Chat: { workspaceId: string; workspaceName: string };
@@ -54,6 +56,19 @@ function AuthNavigator() {
             screenOptions={{
                 headerShown: false,
                 contentStyle: { backgroundColor: '#0a0a0a' },
+                animation: 'fade',
+                animationDuration: 220,
+                animationTypeForReplace: 'push',
+                transitionSpec: {
+                    open: {
+                        animation: 'timing',
+                        config: { duration: 220, easing: Easing.out(Easing.cubic) },
+                    },
+                    close: {
+                        animation: 'timing',
+                        config: { duration: 220, easing: Easing.out(Easing.cubic) },
+                    },
+                },
             }}
         >
             <AuthStack.Screen name="Login" component={LoginScreen} />
@@ -73,11 +88,25 @@ function AppNavigator() {
             screenOptions={{
                 headerShown: false,
                 contentStyle: { backgroundColor: '#0a0a0a' },
+                animation: 'fade',
+                animationDuration: 220,
+                animationTypeForReplace: 'push',
+                transitionSpec: {
+                    open: {
+                        animation: 'timing',
+                        config: { duration: 220, easing: Easing.out(Easing.cubic) },
+                    },
+                    close: {
+                        animation: 'timing',
+                        config: { duration: 220, easing: Easing.out(Easing.cubic) },
+                    },
+                },
             }}
             initialRouteName={showOnboarding ? 'Onboarding' : 'Workspaces'}
         >
             <AppStack.Screen name="Onboarding" component={OnboardingScreen} />
             <AppStack.Screen name="Workspaces" component={WorkspacesScreen} />
+            <AppStack.Screen name="Invites" component={InvitesScreen} />
             <AppStack.Screen name="Notes" component={NotesScreen} />
             <AppStack.Screen name="NoteEditor" component={NoteEditorScreen} />
             <AppStack.Screen name="Chat" component={ChatScreen} />

@@ -14,10 +14,12 @@ import {
     Platform,
     Animated,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '../api/restApi';
 import { useAuth } from '../context/AuthContext';
 import { haptics } from '../utils/haptics';
+import { listPerfConfig } from '../utils/perf';
 import { BackgroundGlow } from '../components/BackgroundGlow';
 import { createSlideUp, getAnimatedStyle } from '../utils/animations';
 import type { Workspace } from '../types';
@@ -31,6 +33,12 @@ type WorkspaceRowProps = {
     onPress: (workspace: Workspace) => void;
     onLongPress: (workspace: Workspace) => void;
 };
+
+const WORKSPACE_ROW_HEIGHT = 80;
+const WORKSPACE_ROW_SPACING = 12;
+const WORKSPACE_LIST_PADDING_TOP = 8;
+const WORKSPACE_LIST_PADDING_HORIZONTAL = 20;
+const WORKSPACE_LIST_PADDING_BOTTOM = 20;
 
 const WorkspaceRow = memo(function WorkspaceRow({ item, onPress, onLongPress }: WorkspaceRowProps) {
     return (
@@ -46,7 +54,9 @@ const WorkspaceRow = memo(function WorkspaceRow({ item, onPress, onLongPress }: 
                 </Text>
             </View>
             <View style={styles.workspaceInfo}>
-                <Text style={styles.workspaceName}>{item.name || 'Untitled Workspace'}</Text>
+                <Text style={styles.workspaceName} numberOfLines={1}>
+                    {item.name || 'Untitled Workspace'}
+                </Text>
                 <Text style={styles.workspaceMeta}>
                     {(item.memberCount ?? item.members?.length ?? 0)} member
                     {(item.memberCount ?? item.members?.length ?? 0) !== 1 ? 's' : ''}
@@ -76,8 +86,14 @@ export function WorkspacesScreen({ navigation }: Props) {
     const [showActionsModal, setShowActionsModal] = useState(false);
     const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(null);
     const { user, logout } = useAuth();
+    const {
+        initialNumToRender,
+        windowSize,
+        maxToRenderPerBatch,
+        updateCellsBatchingPeriod,
+    } = listPerfConfig;
 
-    const loadWorkspaces = async (showRefresh = false) => {
+    const loadWorkspaces = useCallback(async (showRefresh = false) => {
         if (showRefresh) setIsRefreshing(true);
         try {
             const data = await api.getWorkspaces();
@@ -88,11 +104,13 @@ export function WorkspacesScreen({ navigation }: Props) {
             setIsLoading(false);
             setIsRefreshing(false);
         }
-    };
-
-    useEffect(() => {
-        loadWorkspaces();
     }, []);
+
+    useFocusEffect(
+        useCallback(() => {
+            void loadWorkspaces();
+        }, [loadWorkspaces]),
+    );
 
     useEffect(() => {
         introAnim.start();
@@ -173,6 +191,9 @@ export function WorkspacesScreen({ navigation }: Props) {
 
     const handleWorkspacePress = useCallback(
         (workspace: Workspace) => {
+            // Fire-and-forget prefetch to reduce perceived load on next screen.
+            void api.getGroups(workspace.id).catch(() => {});
+            void api.getNotes(workspace.id, null, '', { limit: 50 }).catch(() => {});
             navigation.navigate('Notes', { workspaceId: workspace.id, workspaceName: workspace.name });
         },
         [navigation],
@@ -205,18 +226,29 @@ export function WorkspacesScreen({ navigation }: Props) {
                     <View>
                         <Text style={styles.greeting}>Hello, {user?.name?.split(' ')[0] || 'there'} 👋</Text>
                         <Text style={styles.title}>Your Workspaces</Text>
-                    </View>
-                    <TouchableOpacity
-                        style={styles.profileButton}
-                        onPress={() => {
-                            haptics.light();
-                            navigation.navigate('Profile');
-                        }}
-                    >
-                        <Text style={styles.profileInitial}>
-                            {user?.name?.charAt(0).toUpperCase() || '?'}
+                        <Text style={styles.subtitle}>
+                            {workspaces.length} workspace{workspaces.length === 1 ? '' : 's'}
                         </Text>
-                    </TouchableOpacity>
+                    </View>
+                    <View style={styles.headerActions}>
+                        <TouchableOpacity
+                            style={styles.invitesButton}
+                            onPress={() => navigation.navigate('Invites')}
+                        >
+                            <Text style={styles.invitesText}>Invites</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.profileButton}
+                            onPress={() => {
+                                haptics.light();
+                                navigation.navigate('Profile');
+                            }}
+                        >
+                            <Text style={styles.profileInitial}>
+                                {user?.name?.charAt(0).toUpperCase() || '?'}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 <FlatList
@@ -224,10 +256,15 @@ export function WorkspacesScreen({ navigation }: Props) {
                     keyExtractor={(item) => item.id}
                     renderItem={renderWorkspace}
                     contentContainerStyle={styles.list}
-                    initialNumToRender={6}
-                    windowSize={7}
-                    maxToRenderPerBatch={8}
-                    updateCellsBatchingPeriod={50}
+                    getItemLayout={(_, index) => ({
+                        length: WORKSPACE_ROW_HEIGHT + WORKSPACE_ROW_SPACING,
+                        offset: WORKSPACE_LIST_PADDING_TOP + (WORKSPACE_ROW_HEIGHT + WORKSPACE_ROW_SPACING) * index,
+                        index,
+                    })}
+                    initialNumToRender={initialNumToRender}
+                    windowSize={windowSize}
+                    maxToRenderPerBatch={maxToRenderPerBatch}
+                    updateCellsBatchingPeriod={updateCellsBatchingPeriod}
                     removeClippedSubviews
                     refreshControl={
                         <RefreshControl
@@ -496,6 +533,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: 20,
     },
+    headerActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
     greeting: {
         fontSize: 12,
         color: '#9aa0a6',
@@ -506,6 +548,11 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: '#fff',
     },
+    subtitle: {
+        fontSize: 12,
+        color: '#6b7280',
+        marginTop: 4,
+    },
     logoutButton: {
         padding: 8,
     },
@@ -515,12 +562,14 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
     list: {
-        padding: 20,
-        paddingTop: 8,
+        paddingHorizontal: WORKSPACE_LIST_PADDING_HORIZONTAL,
+        paddingTop: WORKSPACE_LIST_PADDING_TOP,
+        paddingBottom: WORKSPACE_LIST_PADDING_BOTTOM,
     },
     workspaceCard: {
         flexDirection: 'row',
         alignItems: 'center',
+        height: WORKSPACE_ROW_HEIGHT,
         backgroundColor: '#141414',
         borderRadius: 16,
         padding: 16,
@@ -598,6 +647,19 @@ const styles = StyleSheet.create({
         backgroundColor: '#3b82f6',
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    invitesButton: {
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 18,
+        backgroundColor: '#111827',
+        borderWidth: 1,
+        borderColor: '#1f2937',
+    },
+    invitesText: {
+        color: '#cbd5f5',
+        fontSize: 12,
+        fontWeight: '600',
     },
     profileInitial: {
         fontSize: 18,

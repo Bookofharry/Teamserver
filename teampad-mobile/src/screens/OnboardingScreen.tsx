@@ -169,6 +169,15 @@ export function OnboardingScreen({ navigation }: Props) {
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
+                getItemLayout={(_, index) => ({
+                    length: width,
+                    offset: width * index,
+                    index,
+                })}
+                initialNumToRender={1}
+                windowSize={3}
+                maxToRenderPerBatch={2}
+                removeClippedSubviews
                 onScroll={handleScroll}
                 onViewableItemsChanged={onViewableItemsChanged}
                 viewabilityConfig={{ viewAreaCoveragePercentThreshold: 50 }}
