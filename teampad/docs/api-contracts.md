@@ -1,10 +1,10 @@
 # TeamPad API Contracts (Draft)
 
-Base URL: `https://<your-api-host>/v1`
+Base URL: `https://<your-api-host>/api`
 
 Auth:
 - Default: HTTP-only session cookie set by `POST /auth/login` or `POST /auth/signup`.
-- Optional: `Authorization: Bearer <jwt>` for server-to-server calls.
+- Mobile uses `Authorization: Bearer <jwt>` (stored in SecureStore).
 
 Timestamps: ISO 8601 strings in UTC.
 

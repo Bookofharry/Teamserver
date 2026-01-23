@@ -1,4 +1,4 @@
-# TeamPad Pre-MVP Presentation (v1.10)
+# TeamPad Pre-MVP Presentation (v2.x, mobile-first)
 
 ## Slide Guide (12 slides)
 1) Title + one-liner
@@ -7,7 +7,7 @@
 4) Solution
 5) Product tour (core flows)
 6) Workspace chat
-7) Notes + version history
+7) Notes
 8) Security + trust
 9) Plans + limits
 10) MVP scope + what’s next
@@ -32,7 +32,7 @@ Teams lose context across chat threads and scattered docs. Notes get buried, own
 - Teams want speed, clarity, and lightweight structure.
 
 ## 4) Solution
-TeamPad provides structured workspaces, collections, notes, and realtime workspace chat with controlled access, fast search, and a frictionless invite flow.
+TeamPad provides structured workspaces, collections, notes, and realtime workspace chat with controlled access and a frictionless invite flow.
 
 ## 5) Product Tour (Core Flow)
 **MVP hypothesis:** Teams will prefer capturing decisions in the same place they chat, instead of splitting Slack + docs.
@@ -44,14 +44,12 @@ Flow:
 
 ## 6) Workspace Chat (MVP Core)
 - Realtime per workspace (Ably).
-- Mentions, reactions, and image uploads.
-- Unread + mention counters.
+- Reactions + typing indicator.
 
 ## 7) Notes (MVP Core)
 - Create, edit, save, delete.
-- Pin/unpin, tags, quick preview.
-- Save status + explicit Save button.
-- Attachments stored in Supabase storage.
+- Pin/unpin, search, quick preview.
+- Mobile auto-save (no blocking save step).
 
 ## 8) Security + Trust
 - Session cookie auth for private API routes (optional bearer token supported).
@@ -67,8 +65,8 @@ Flow:
 ## 10) MVP Scope + What’s Next
 **Included (MVP Core)**
 - Auth, workspaces, collections, notes, invites.
-- Search and basic organization (pinning, tags).
-- Workspace chat (realtime, mentions, reactions).
+- Search and basic organization (pinning).
+- Workspace chat (realtime, reactions).
 
 **Next**
 1) Invite acceptance UX polish + email deliverability hardening  
@@ -111,7 +109,7 @@ Details in `teampad/docs/mvp-validation-plan.md`.
 - Product, operations, and marketing teams that need shared notes
 - Founders who need a fast, structured knowledge hub
 
-## Current Product Scope (Private Beta v1.9)
+## Current Product Scope (Private Beta - mobile-first)
 
 ### Core User Flows
 - Visit marketing home (`/`) -> click Open App.
@@ -119,7 +117,7 @@ Details in `teampad/docs/mvp-validation-plan.md`.
 - Redirect to `/app` (dashboard).
 - Create or select workspace -> create group -> create note.
 - Invite members via email -> accept invite via `/invite/:token`.
-- Use workspace chat for realtime updates and mentions.
+- Use workspace chat for realtime updates and reactions.
 
 ### Built (Not All MVP-Critical)
 **Workspaces**
@@ -136,44 +134,35 @@ Details in `teampad/docs/mvp-validation-plan.md`.
   - block if pending invite exists
 - Members list with role badges and remove flow (owner/admin rules).
 
-**Groups**
-- Create groups inside a workspace.
-- Default group created on workspace setup.
+**Collections (Groups)**
+- Create collections inside a workspace.
+- Default "General" collection created on first workspace.
 
 **Notes**
 - Create, edit, save, delete.
-- Pin/unpin.
-- Tags and quick preview in the list.
-- Save status + explicit Save button.
-- Version history UI + restore flow (plan-limited).
-- Attachments (upload/download) stored in Supabase storage.
-- Public notes (shareable link with expiry).
+- Pin/unpin + search.
+- Quick preview in the list.
+- Mobile auto-save.
 
 **Workspace Chat**
 - Realtime per workspace (Ably).
-- Mentions, reactions, and image uploads.
-- Unread + mention counters.
+- Reactions + typing indicator.
 - Message retention by plan (free 1k, premium 3k, premium+ 10k).
-- **Voice Notes**: Integrated audio recorder and player with "WhatsApp" style UI.
 
-**Unique "Better than Notion" Features**
-- **Focus Mode**: "Zen" mode toggle for distraction-free writing.
-- **Team Pulse**: User status and emoji presence system (surfaced in sidebar).
+**Unique "Better than Notion" Features (planned)**
+- Focus Mode
+- Team Pulse
+- Voice Notes
 
 **Search**
 - Workspace-wide search; when query is present, results span all groups.
 
 **Settings**
-- Theme selection (light/dark/system).
-- Default group + time format preferences.
-- Profile update (avatar; name locked with support prompt).
+- Profile update (name).
 - Reset password trigger (custom auth flow).
-- AI provider preference (server default, mock, gemini).
 
-**AI Panel (Mock)**
-- AI actions panel in the note editor (summary/actions/title).
-- Streaming answers with server-side provider (mock or Gemini).
-- Provider selection preference stored client-side (server may override).
+**AI Panel (planned)**
+- Server supports AI provider config; UI not shipped in mobile.
 
 **Branding + UI**
 - TeamPad logo and branded marketing site.
@@ -239,7 +228,6 @@ Main tables:
 **Premium+**
 - Price: $25/month
 - Unlimited workspaces/groups/notes.
-- TeamPad AI (summaries/actions).
 - Public notes (unlisted shareable links).
 - Advanced security + audit trail.
 - Priority support + future SSO/analytics.
@@ -249,18 +237,17 @@ Main tables:
 **Note:** Billing is not implemented yet. These tiers define product boundaries and UI upgrade prompts.
 
 ## What We Start With (Pre-MVP Release)
-- Auth, workspaces, groups, notes, and invites.
-- Search, pinning, and version history UI.
-- Workspace chat (realtime, mentions, reactions).
-- Theme + settings.
+- Auth, workspaces, collections, notes, and invites.
+- Search and pinning (mobile).
+- Workspace chat (realtime, reactions, typing).
+- Profile + settings (mobile).
 - Role-based access.
-- Branded marketing site.
 
 ## What Is Intentionally Out of Scope (For Now)
 - Audit log UI
 - Billing / subscriptions
 - Workspace analytics
-- AI integrations (mock only)
+- AI integrations (UI not shipped)
 
 ## Risks / Constraints
 - Invite system depends on SMTP config (must be reliable).
@@ -274,4 +261,4 @@ Main tables:
 4) Real-time co-editing  
 
 ## Current Version
-**TeamPad v1.9** (private beta baseline)
+**TeamPad v2.x** (mobile-first private beta)

@@ -21,6 +21,7 @@ import { useAuth } from '../context/AuthContext';
 import { haptics } from '../utils/haptics';
 import { listPerfConfig } from '../utils/perf';
 import { BackgroundGlow } from '../components/BackgroundGlow';
+import { WorkspacesListSkeleton } from '../components/SkeletonLoader';
 import { createSlideUp, getAnimatedStyle } from '../utils/animations';
 import type { Workspace } from '../types';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -32,6 +33,7 @@ type WorkspaceRowProps = {
     item: Workspace;
     onPress: (workspace: Workspace) => void;
     onLongPress: (workspace: Workspace) => void;
+    onPressIn: (workspace: Workspace) => void;
 };
 
 const WORKSPACE_ROW_HEIGHT = 80;
@@ -40,12 +42,13 @@ const WORKSPACE_LIST_PADDING_TOP = 8;
 const WORKSPACE_LIST_PADDING_HORIZONTAL = 20;
 const WORKSPACE_LIST_PADDING_BOTTOM = 20;
 
-const WorkspaceRow = memo(function WorkspaceRow({ item, onPress, onLongPress }: WorkspaceRowProps) {
+const WorkspaceRow = memo(function WorkspaceRow({ item, onPress, onLongPress, onPressIn }: WorkspaceRowProps) {
     return (
         <TouchableOpacity
             style={styles.workspaceCard}
             onPress={() => onPress(item)}
             onLongPress={() => onLongPress(item)}
+            onPressIn={() => onPressIn(item)}
             delayLongPress={500}
         >
             <View style={styles.workspaceIcon}>
@@ -96,6 +99,11 @@ export function WorkspacesScreen({ navigation }: Props) {
     const loadWorkspaces = useCallback(async (showRefresh = false) => {
         if (showRefresh) setIsRefreshing(true);
         try {
+            const cached = api.peekWorkspaces();
+            if (cached && cached.length > 0 && !showRefresh) {
+                setWorkspaces(cached);
+                setIsLoading(false);
+            }
             const data = await api.getWorkspaces();
             setWorkspaces(data);
         } catch {
@@ -199,24 +207,23 @@ export function WorkspacesScreen({ navigation }: Props) {
         [navigation],
     );
 
+    const handleWorkspacePressIn = useCallback((workspace: Workspace) => {
+        void api.getGroups(workspace.id).catch(() => {});
+        void api.getNotes(workspace.id, null, '', { limit: 50 }).catch(() => {});
+        void api.getChatMessages(workspace.id, { limit: 50 }).catch(() => {});
+    }, []);
+
     const renderWorkspace = useCallback(
         ({ item }: { item: Workspace }) => (
             <WorkspaceRow
                 item={item}
                 onPress={handleWorkspacePress}
                 onLongPress={handleWorkspaceLongPress}
+                onPressIn={handleWorkspacePressIn}
             />
         ),
-        [handleWorkspacePress, handleWorkspaceLongPress],
+        [handleWorkspacePress, handleWorkspaceLongPress, handleWorkspacePressIn],
     );
-
-    if (isLoading) {
-        return (
-            <View style={styles.centered}>
-                <ActivityIndicator size="large" color="#3b82f6" />
-            </View>
-        );
-    }
 
     return (
         <View style={styles.container}>
@@ -251,47 +258,54 @@ export function WorkspacesScreen({ navigation }: Props) {
                     </View>
                 </View>
 
-                <FlatList
-                    data={workspaces}
-                    keyExtractor={(item) => item.id}
-                    renderItem={renderWorkspace}
-                    contentContainerStyle={styles.list}
-                    getItemLayout={(_, index) => ({
-                        length: WORKSPACE_ROW_HEIGHT + WORKSPACE_ROW_SPACING,
-                        offset: WORKSPACE_LIST_PADDING_TOP + (WORKSPACE_ROW_HEIGHT + WORKSPACE_ROW_SPACING) * index,
-                        index,
-                    })}
-                    initialNumToRender={initialNumToRender}
-                    windowSize={windowSize}
-                    maxToRenderPerBatch={maxToRenderPerBatch}
-                    updateCellsBatchingPeriod={updateCellsBatchingPeriod}
-                    removeClippedSubviews
-                    refreshControl={
-                        <RefreshControl
-                            refreshing={isRefreshing}
-                            onRefresh={() => loadWorkspaces(true)}
-                            tintColor="#3b82f6"
-                        />
-                    }
-                    ListEmptyComponent={
-                        <View style={styles.empty}>
-                            <View style={styles.emptyCard}>
-                                <Text style={styles.emptyTitle}>No workspaces yet</Text>
-                                <Text style={styles.emptyText}>
-                                    Create your first workspace to get started
-                                </Text>
-                                <TouchableOpacity
-                                    style={styles.emptyPrimaryButton}
-                                    onPress={() => setShowCreateModal(true)}
-                                >
-                                    <Text style={styles.emptyPrimaryText}>Create workspace</Text>
-                                </TouchableOpacity>
+                {isLoading && workspaces.length === 0 ? (
+                    <WorkspacesListSkeleton />
+                ) : (
+                    <FlatList
+                        data={workspaces}
+                        keyExtractor={(item) => item.id}
+                        renderItem={renderWorkspace}
+                        contentContainerStyle={styles.list}
+                        getItemLayout={(_, index) => ({
+                            length: WORKSPACE_ROW_HEIGHT + WORKSPACE_ROW_SPACING,
+                            offset: WORKSPACE_LIST_PADDING_TOP + (WORKSPACE_ROW_HEIGHT + WORKSPACE_ROW_SPACING) * index,
+                            index,
+                        })}
+                        initialNumToRender={initialNumToRender}
+                        windowSize={windowSize}
+                        maxToRenderPerBatch={maxToRenderPerBatch}
+                        updateCellsBatchingPeriod={updateCellsBatchingPeriod}
+                        removeClippedSubviews
+                        refreshControl={
+                            <RefreshControl
+                                refreshing={isRefreshing}
+                                onRefresh={() => loadWorkspaces(true)}
+                                tintColor="#3b82f6"
+                            />
+                        }
+                        ListEmptyComponent={
+                            <View style={styles.empty}>
+                                <View style={styles.emptyCard}>
+                                    <Text style={styles.emptyTitle}>No workspaces yet</Text>
+                                    <Text style={styles.emptyText}>
+                                        Create your first workspace to get started
+                                    </Text>
+                                    <TouchableOpacity
+                                        style={styles.emptyPrimaryButton}
+                                        onPress={() => setShowCreateModal(true)}
+                                    >
+                                        <Text style={styles.emptyPrimaryText}>Create workspace</Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
-                        </View>
-                    }
-                />
+                        }
+                    />
+                )}
 
-                <TouchableOpacity style={styles.fab} onPress={() => setShowCreateModal(true)}>
+                <TouchableOpacity
+                    style={[styles.fab, { bottom: insets.bottom + 24 }]}
+                    onPress={() => setShowCreateModal(true)}
+                >
                     <Text style={styles.fabText}>+</Text>
                 </TouchableOpacity>
             </Animated.View>

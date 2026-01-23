@@ -3,16 +3,16 @@ TeamPad Production Runbook
 
 Purpose
 -------
-This document is the post-deploy runbook for TeamPad. It lists the required
-environment variables, deployment steps, verification checks, and the minimum
-improvements to keep the app stable in production.
+This document is the post-deploy runbook for TeamPad (server + web + mobile).
+It lists required environment variables, deployment steps, verification checks,
+and the minimum improvements to keep the app stable in production.
 
 
 Contents
 --------
 1) Production Environment Checklist
 2) Required Environment Variables
-3) Deploy Steps (Server + Web)
+3) Deploy Steps (Server + Web + Mobile)
 4) Post-Deploy Verification
 5) Monitoring + Alerts
 6) Rollback Plan
@@ -46,7 +46,7 @@ Server (server/.env in production platform):
 - AUTH_COOKIE_SECURE=true
 - SUPABASE_URL=https://<your-project>.supabase.co
 - SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
-- ABLY_KEY=<ably-key> (or ABLY_AUTH_URL if using token endpoint)
+- ABLY_API_KEY=<ably-key> (required for realtime publish + token auth)
 - SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM
 - AUTH_JWT_TTL_SECONDS=604800 (7 days) or desired session duration
 - CSRF_TOKEN_TTL_SECONDS=3600 (or desired CSRF TTL)
@@ -56,6 +56,11 @@ Web (teampad/.env in production platform):
 - VITE_ABLY_AUTH_URL=https://<your-api-domain>/api/ably/auth (recommended)
 - VITE_ABLY_CHAT=true
 - VITE_SHOW_PLAN_DEBUG=false
+
+Mobile (teampad-mobile/.env or Expo secrets):
+- EXPO_PUBLIC_API_URL=https://<your-api-domain>/api
+- EXPO_PUBLIC_LOW_END_PROFILE=false
+- EXPO_PUBLIC_PERF_OVERLAY=false
 
 Notes:
 - If web and server are on different domains, SameSite must be "none" and
@@ -75,6 +80,11 @@ Web:
 1. Set production env vars in the web host.
 2. Build the web app.
 3. Deploy static assets.
+
+Mobile (Expo):
+1. Set Expo secrets for `EXPO_PUBLIC_API_URL`.
+2. Build release via EAS or your chosen pipeline.
+3. Confirm login + chat realtime on a physical device.
 
 Required migrations (newest last):
 - server/docs/migrations/20260101_fix_profiles_fk.sql
@@ -186,3 +196,4 @@ If deployment fails:
 - Avoid repeated refresh loops on 401 (single retry).
 - Cache user profile + workspace metadata where safe.
 - Use Ably token auth (not direct key) in production.
+- Prefer cached render + background refresh on mobile.

@@ -44,6 +44,8 @@ Password reset email (optional, but recommended):
 
 ## Auth Endpoints
 
+Base URL: `/api`
+
 - `POST /auth/signup/request` `{ email }`
 - `POST /auth/signup/verify` `{ name, email, password, code }`
 - `POST /auth/login` `{ email, password }`
@@ -59,3 +61,7 @@ The server sets an HTTP-only cookie named `AUTH_COOKIE_NAME` on login/signup.
 - Login/Signup pages call the new endpoints.
 - Auth state is derived from `/me`.
 - Password reset uses email link with token.
+
+## Mobile Flow
+- Mobile uses Bearer tokens stored in SecureStore.
+- Set `EXPO_PUBLIC_API_URL` to your `/api` base.

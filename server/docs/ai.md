@@ -1,4 +1,8 @@
-AI integration notes
+AI integration notes (optional / not in mobile UI)
+
+Status:
+- Server supports AI provider config and vector store setup.
+- Current mobile app does not surface AI features.
 
 This file documents a minimal setup for the vector store using Supabase Postgres with `pgvector` extension.
 

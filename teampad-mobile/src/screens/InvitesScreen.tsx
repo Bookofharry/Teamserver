@@ -32,6 +32,11 @@ export function InvitesScreen({ navigation }: Props) {
     const loadInvites = useCallback(async (showRefresh = false) => {
         if (showRefresh) setIsRefreshing(true);
         try {
+            const cached = api.peekInvites();
+            if (cached && cached.length > 0 && !showRefresh) {
+                setInvites(cached);
+                setIsLoading(false);
+            }
             const data = await api.listMyInvites();
             setInvites(data);
         } catch {

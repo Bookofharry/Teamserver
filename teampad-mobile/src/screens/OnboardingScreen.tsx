@@ -188,7 +188,7 @@ export function OnboardingScreen({ navigation }: Props) {
             {renderDots()}
 
             {/* Bottom Buttons */}
-            <View style={styles.bottomContainer}>
+            <View style={[styles.bottomContainer, { paddingBottom: insets.bottom + 24 }]}>
                 <TouchableOpacity
                     style={[styles.nextButton, isLastSlide && styles.nextButtonFinal]}
                     onPress={handleNext}

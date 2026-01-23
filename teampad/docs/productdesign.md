@@ -1,9 +1,12 @@
 # TeamPad — Product Design Document
 
 > **Version:** 1.0.0  
-> **Status:** MVP Development  
-> **Last Updated:** 2025-01-28  
+> **Status:** Active (mobile-first build)  
+> **Last Updated:** 2026-01-23  
 > **Owner:** Product Team
+
+> **Current build note:** Mobile app ships core auth/workspaces/notes/chat/invites.
+> AI, voice notes, focus mode, and team pulse are **planned** and remain in this doc as roadmap items.
 
 ---
 
@@ -49,7 +52,7 @@ TeamPad is a **team notes application** designed for internal teams, freelancers
 | Note-taking apps are bloated | Minimal, focused feature set |
 | Collaboration is complex | Simple refresh-on-save model |
 | Organization becomes messy | Enforced workspace/group structure |
-| AI is bolted on | Native AI assistance for summaries & actions |
+| AI is bolted on | AI assistance planned (server-ready, UI not shipped in mobile) |
 
 ### MVP Scope
 
@@ -58,9 +61,9 @@ TeamPad is a **team notes application** designed for internal teams, freelancers
 | Email/password auth + email verification code | 2FA (post-MVP) |
 | Workspace/Group/Note CRUD | Nested folder hierarchies |
 | Refresh-on-save realtime | Live collaborative editing (CRDT/OT) |
-| AI summaries & action items | AI chat interface |
 | Basic rich text editing | Advanced formatting (tables, embeds) |
 | Role-based access (Owner/Admin/Member) | Custom permission granularity |
+|  | AI summaries, action items, and AI chat interface |
 
 ---
 

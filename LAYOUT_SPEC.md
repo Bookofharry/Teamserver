@@ -1,7 +1,17 @@
 # TeamPad Layout Specification (Improved)
 
-Version: 2.0
-Scope: Desktop + Tablet + Mobile
+Version: 2.1
+Scope: Mobile (current) + Web (planned)
+
+## 0) Current App State (Mobile)
+- Mobile-first layout with full-screen screens (Workspaces, Notes, Chat, Settings).
+- Collections use a compact dropdown picker to avoid overlap on small screens.
+- Notes list + chat list are virtualized with fixed heights where possible.
+- Branded modals for auth and invites; no full-screen blank loading states.
+- Safe-area spacing for FABs and input bars.
+
+Notes:
+- Web layout sections below are **aspirational** and should be treated as roadmap guidance, not shipped UI.
 
 ## 1) Layout Grid and Spacing
 - Base grid: 4px
@@ -16,14 +26,14 @@ Scope: Desktop + Tablet + Mobile
 - Tablet: 768px to 1023px
 - Mobile: <= 767px
 
-## 3) Global Structure (Improved)
+## 3) Global Structure (Planned Web Layout)
 - Header (top bar): always visible, primary actions
 - Sidebar: collapsible by default on login
 - Notes list: resizable, with clear note density controls
 - Editor: stable outer frame + inner writing frame
 - Right panels: Chat and AI as overlays, not permanent columns
 
-## 4) Desktop Layout (Improved)
+## 4) Desktop Layout (Planned)
 
 ### 4.1 Header (top)
 Height: 64px
@@ -88,18 +98,18 @@ Sections:
 - Conversation stream
 - Prompt input
 
-## 5) Tablet Layout (Improved)
+## 5) Tablet Layout (Planned)
 - Sidebar collapses by default
 - Notes list and editor stack vertically
 - Chat/AI open full-height overlays
 - Header always visible
 
-## 6) Mobile Layout (Improved)
-- Sidebar hidden; workspace switcher in header
-- Notes list in sheet or separate view
-- Editor full screen
-- Chat full screen
-- AI panel full screen
+## 6) Mobile Layout (Current)
+- Workspace list (full screen) → Notes (full screen) → Chat (full screen).
+- Collections in a dropdown picker + add button.
+- Note editor full screen with autosave.
+- Chat full screen with search, reactions, and typing indicators.
+Currently no AI panel in mobile UI.
 
 ## 7) Icon Placement and Sizes
 - Header icons: 20px
@@ -166,8 +176,8 @@ Sections:
 | Notes list + editor stacked                 |
 +---------------------------------------------+
 | Chat / AI overlays                          |
-places where general collections likely shows
-General Collection+---------------------------------------------+
+### 10.4 Tablet
+(Planned web/tablet layout. Not shipped in the current mobile build.)
 
 ### 10.5 Mobile
 +---------------------------------------------+
@@ -233,4 +243,3 @@ General Collection+---------------------------------------------+
 - Header height: 56px
 - Panels: full screen overlays
 - Bottom padding on composer: 16px
-

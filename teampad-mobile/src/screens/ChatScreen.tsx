@@ -23,6 +23,7 @@ import { haptics } from '../utils/haptics';
 import { listPerfConfig } from '../utils/perf';
 import { BackgroundGlow } from '../components/BackgroundGlow';
 import { createSlideUp, getAnimatedStyle } from '../utils/animations';
+import { ChatSkeleton } from '../components/SkeletonLoader';
 import type { ChatMessage, ChatReaction } from '../types';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AppStackParamList } from '../navigation';
@@ -355,6 +356,14 @@ export function ChatScreen({ navigation, route }: Props) {
     const loadMessages = useCallback(async (showRefresh = false) => {
         if (showRefresh) setIsRefreshing(true);
         try {
+            const cached = api.peekChatMessages(workspaceId);
+            if (cached && cached.length > 0 && !showRefresh) {
+                const sortedCached = [...cached].sort(
+                    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                );
+                setMessages(dedupeMessages(sortedCached));
+                setIsLoading(false);
+            }
             const data = await api.getChatMessages(workspaceId, { limit: 100 });
             const sorted = [...data].sort(
                 (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -708,14 +717,6 @@ export function ChatScreen({ navigation, route }: Props) {
         return messages.filter((message) => message.body?.toLowerCase().includes(query));
     }, [messages, searchQuery]);
 
-    if (isLoading) {
-        return (
-            <View style={styles.centered}>
-                <ActivityIndicator size="large" color="#3b82f6" />
-            </View>
-        );
-    }
-
     return (
         <KeyboardAvoidingView
             style={styles.container}
@@ -771,16 +772,20 @@ export function ChatScreen({ navigation, route }: Props) {
                     />
                 </View>
 
-                <ChatMessagesList
-                    ref={flatListRef}
-                    messages={filteredMessages}
-                    userId={user?.id}
-                    onLongPress={handleMessageLongPress}
-                    onReactionTap={handleReactionTap}
-                    onRefresh={() => loadMessages(true)}
-                    refreshing={isRefreshing}
-                    onFocusInput={() => inputRef.current?.focus()}
-                />
+                {isLoading && messages.length === 0 ? (
+                    <ChatSkeleton />
+                ) : (
+                    <ChatMessagesList
+                        ref={flatListRef}
+                        messages={filteredMessages}
+                        userId={user?.id}
+                        onLongPress={handleMessageLongPress}
+                        onReactionTap={handleReactionTap}
+                        onRefresh={() => loadMessages(true)}
+                        refreshing={isRefreshing}
+                        onFocusInput={() => inputRef.current?.focus()}
+                    />
+                )}
 
                 {Object.keys(typingUsers).length > 0 && (
                     <TypingIndicator
@@ -791,7 +796,7 @@ export function ChatScreen({ navigation, route }: Props) {
                     />
                 )}
 
-                <View style={styles.inputContainer}>
+                <View style={[styles.inputContainer, { paddingBottom: insets.bottom + 16 }]}>
                     <TextInput
                         ref={inputRef}
                         style={styles.textInput}

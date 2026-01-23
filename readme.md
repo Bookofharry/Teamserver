@@ -5,35 +5,36 @@ TeamPad is the calm, fast workspace for teams to capture knowledge, stay aligned
 We will perform the best of the best.
 
 ## What it is
-- Workspaces that keep teams separated and organized.
-- Collections and notes for structured, searchable knowledge.
-- Workspace chat for realtime coordination.
-- A focused AI assistant for summaries and drafting.
+- A calm, fast workspace for teams to capture knowledge and chat in one place.
+- Mobile-first UX with realtime updates and no blank states.
 
-## Key capabilities
-- Custom email and password auth with secure session cookies.
+## Key capabilities (current build)
+- Email/password auth with OTP verification.
 - Workspace roles (owner, admin, member).
-- Notes with tags, pinning, attachments, and version history (plan-capped).
-- Workspace chat with mentions, reactions, and image uploads.
-- **Voice Notes**: "Walkie-Talkie" style voice messages with modern playback.
-- **Focus Mode**: Zen mode for distraction-free writing.
-- **Team Pulse**: Share daily status and vibes with your team.
-- Public note sharing with expiry.
-- Upgrade gates for premium features.
+- Notes: create/edit, pinning, search, quick previews.
+- Workspace chat with realtime updates + reactions.
+- Invites (send, accept, decline) and member list.
+- Onboarding, profile, settings, and branded loading states.
 
 ## Tech stack
-- Frontend: React + Vite + TypeScript + Tailwind + shadcn/ui
+- Web: React + Vite + TypeScript + Tailwind + shadcn/ui
+- Mobile: React Native (Expo) + TypeScript
 - Backend: Node.js + Express
 - Data: Supabase Postgres + Storage
 - Realtime: Ably
 - Email: SMTP (Nodemailer)
-- AI: Gemini 
+- AI (server-only, optional/experimental): Gemini
 
 ## Repo structure
 ```
 teampad/   # Frontend app
+teampad-mobile/   # Mobile app (Expo)
 server/    # API server
 ```
+
+## Current state + roadmap
+- Current build: see `CURRENT_STATE.md`
+- Roadmap: see `ROADMAP.md`
 
 ## Quick start
 Install dependencies:
@@ -58,6 +59,13 @@ cd teampad
 npm run dev
 ```
 
+- Mobile (Expo):
+```sh
+cd teampad-mobile
+npm install
+npm run start
+```
+
 - Frontend: http://localhost:8080
 - API: http://localhost:4000/api
 
@@ -73,6 +81,13 @@ VITE_ABLY_KEY=...               # Optional for local dev
 VITE_ABLY_AUTH_URL=...          # Optional override for Ably auth endpoint
 VITE_ABLY_CHAT=true             # Use Ably Chat rooms for realtime updates
 VITE_SHOW_PLAN_DEBUG=false
+```
+
+### Mobile (`teampad-mobile/.env`)
+```
+EXPO_PUBLIC_API_URL=http://localhost:4000/api
+EXPO_PUBLIC_LOW_END_PROFILE=false
+EXPO_PUBLIC_PERF_OVERLAY=false
 ```
 
 ### Server (`server/.env`)
@@ -124,8 +139,8 @@ npm test
 ## Notes
 - Keep secrets out of source control.
 - Configure `workspace-chat` storage bucket and policies before enabling uploads.
-- Version limits: Free 3, Premium 10, Premium+ 20.
-- Chat retention: Free 1k, Premium 3k, Premium+ 10k messages per workspace.
+- Mobile uses Bearer tokens (stored in SecureStore).
+- Realtime uses Ably token auth via `/api/ably/auth`.
 
 ## Ably setup (first-time)
 1) Create an Ably account + app at https://ably.com  

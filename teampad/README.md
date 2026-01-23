@@ -18,10 +18,12 @@ Frontend runs on http://localhost:8080
 ## Environment (`teampad/.env`)
 ```
 VITE_API_MODE=live
-VITE_API_URL=http://localhost:4000/v1
+VITE_API_URL=http://localhost:4000/api
 VITE_SUPABASE_URL=...
 VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY=...
-VITE_ABLY_KEY=...
+VITE_ABLY_KEY=...                 # Optional for local dev
+VITE_ABLY_AUTH_URL=http://localhost:4000/api/ably/auth
+VITE_ABLY_CHAT=true
 VITE_SHOW_PLAN_DEBUG=false
 ```
 

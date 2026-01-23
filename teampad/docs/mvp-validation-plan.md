@@ -5,7 +5,6 @@ Prove the core bet: teams will capture decisions in the same space they chat, in
 
 ## Week 1 - Ship + Instrument
 - Stabilize invite -> accept -> first note flow.
-- Ensure Team Pulse status persists and is visible.
 - Confirm Dashboard/Chat/Notes are usable on mobile.
 - Ship analytics events listed below.
 
@@ -52,17 +51,11 @@ Prove the core bet: teams will capture decisions in the same space they chat, in
 - `note_saved`
   - payload: `note_id`, `group_id`, `change_count`
 - `chat_message_sent`
-  - payload: `message_id`, `message_type` (text/image/voice), `has_mentions`
+  - payload: `message_id`, `message_type` (text), `has_mentions`
 - `chat_message_read`
   - payload: `latest_message_id`, `unread_count`
-- `chat_mention_received`
-  - payload: `message_id`, `mention_count`
 - `search_used`
   - payload: `query_length`, `scope` (workspace/group)
-- `team_pulse_set`
-  - payload: `status_length`
-- `team_pulse_cleared`
-  - payload: `previous_status_length`
 
 ## Where to Fire Events (Code Map)
 
@@ -92,14 +85,8 @@ Prove the core bet: teams will capture decisions in the same space they chat, in
   - `teampad/src/components/chat/ChatPanel.tsx` after `createMessage.mutateAsync` success in `handleSend`.
 - `chat_message_read`
   - `teampad/src/pages/Dashboard.tsx` in the effect that updates `teampad-chat-last-read` when `showChatPanel` is true.
-- `chat_mention_received`
-  - `teampad/src/hooks/use-chat-realtime.ts` in `handleMessageCreated` when `isMentioned` is true.
 - `search_used`
   - `teampad/src/components/layout/Sidebar.tsx` when `onSearchChange` updates the debounced query (fire once when query length >= 2).
-- `team_pulse_set`
-  - `teampad/src/components/workspaces/StatusDialog.tsx` after `updateProfile.mutateAsync` success when status is non-null.
-- `team_pulse_cleared`
-  - `teampad/src/components/workspaces/StatusDialog.tsx` after `updateProfile.mutateAsync` success when status is null.
 
 ## Pilot Checklist (5-10 teams)
 - Preload: create the workspace, one collection, and a welcome note.

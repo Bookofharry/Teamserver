@@ -31,6 +31,21 @@ const isDev =
     (globalThis as { __DEV__?: boolean }).__DEV__ ??
     process.env.NODE_ENV === 'development';
 
+type CacheEntry<T> = {
+    data: T;
+    timestamp: number;
+};
+
+const cacheStore = new Map<string, CacheEntry<unknown>>();
+
+const setCache = <T>(key: string, data: T) => {
+    cacheStore.set(key, { data, timestamp: Date.now() });
+};
+
+const getCache = <T>(key: string): CacheEntry<T> | undefined => {
+    return cacheStore.get(key) as CacheEntry<T> | undefined;
+};
+
 type RawUser = Partial<User> & {
     last_workspace_id?: string | null;
     status_emoji?: string | null;
@@ -238,7 +253,40 @@ const normalizeChatMessage = (message: RawChatMessage): ChatMessage => ({
     mentions: message.mentions ?? [],
 });
 
+const cacheKeys = {
+    workspaces: 'workspaces',
+    groups: (workspaceId: string) => `groups:${workspaceId}`,
+    notes: (workspaceId: string, groupId?: string | null, search?: string) =>
+        `notes:${workspaceId}:${groupId ?? 'all'}:${search ?? ''}`,
+    chat: (workspaceId: string) => `chat:${workspaceId}`,
+    invites: 'invites',
+};
+
 export const restApi = {
+    peekWorkspaces(): Workspace[] | null {
+        const cached = getCache<Workspace[]>(cacheKeys.workspaces);
+        return cached?.data ?? null;
+    },
+
+    peekGroups(workspaceId: string): Group[] | null {
+        const cached = getCache<Group[]>(cacheKeys.groups(workspaceId));
+        return cached?.data ?? null;
+    },
+
+    peekNotes(workspaceId: string, groupId?: string | null, search?: string): Note[] | null {
+        const cached = getCache<Note[]>(cacheKeys.notes(workspaceId, groupId, search));
+        return cached?.data ?? null;
+    },
+
+    peekChatMessages(workspaceId: string): ChatMessage[] | null {
+        const cached = getCache<ChatMessage[]>(cacheKeys.chat(workspaceId));
+        return cached?.data ?? null;
+    },
+
+    peekInvites(): WorkspaceInvite[] | null {
+        const cached = getCache<WorkspaceInvite[]>(cacheKeys.invites);
+        return cached?.data ?? null;
+    },
     // Auth
     async requestSignupOtp(email: string): Promise<{ sent: boolean }> {
         return request<{ sent: boolean }>('/auth/signup/request', {
@@ -328,7 +376,9 @@ export const restApi = {
     // Workspaces
     async getWorkspaces(): Promise<Workspace[]> {
         const data = await request<RawWorkspace[]>('/workspaces');
-        return data.map(normalizeWorkspace);
+        const normalized = data.map(normalizeWorkspace);
+        setCache(cacheKeys.workspaces, normalized);
+        return normalized;
     },
 
     async createWorkspace(input: { name: string }): Promise<Workspace> {
@@ -367,7 +417,9 @@ export const restApi = {
 
     async listMyInvites(): Promise<WorkspaceInvite[]> {
         const data = await request<RawInvite[]>('/invites');
-        return data.map(normalizeInvite);
+        const normalized = data.map(normalizeInvite);
+        setCache(cacheKeys.invites, normalized);
+        return normalized;
     },
 
     async createInvite(input: { workspaceId: string; email: string; role?: UserRole }): Promise<WorkspaceInvite> {
@@ -395,7 +447,9 @@ export const restApi = {
     // Groups
     async getGroups(workspaceId: string): Promise<Group[]> {
         const data = await request<RawGroup[]>(`/workspaces/${workspaceId}/groups`);
-        return data.map(normalizeGroup);
+        const normalized = data.map(normalizeGroup);
+        setCache(cacheKeys.groups(workspaceId), normalized);
+        return normalized;
     },
 
     async createGroup(input: { workspaceId: string; name: string; color?: string }): Promise<Group> {
@@ -421,7 +475,9 @@ export const restApi = {
 
         const query = params.toString();
         const data = await request<RawNote[]>(`/workspaces/${workspaceId}/notes${query ? `?${query}` : ''}`);
-        return data.map(normalizeNote);
+        const normalized = data.map(normalizeNote);
+        setCache(cacheKeys.notes(workspaceId, groupId, search), normalized);
+        return normalized;
     },
 
     async getNote(noteId: string): Promise<Note> {
@@ -488,7 +544,9 @@ export const restApi = {
         const data = await request<RawChatMessage[]>(
             `/workspaces/${workspaceId}/chat/messages${query ? `?${query}` : ''}`
         );
-        return data.map(normalizeChatMessage);
+        const normalized = data.map(normalizeChatMessage);
+        setCache(cacheKeys.chat(workspaceId), normalized);
+        return normalized;
     },
 
     async getAblyToken(): Promise<AblyTokenRequest> {

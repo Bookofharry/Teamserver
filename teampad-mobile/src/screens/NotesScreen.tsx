@@ -21,6 +21,7 @@ import { useAuth } from '../context/AuthContext';
 import { BackgroundGlow } from '../components/BackgroundGlow';
 import { createSlideUp, getAnimatedStyle } from '../utils/animations';
 import { listPerfConfig } from '../utils/perf';
+import { NotesListSkeleton } from '../components/SkeletonLoader';
 import type { Note, Group, WorkspaceMember } from '../types';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AppStackParamList } from '../navigation';
@@ -30,6 +31,7 @@ type Props = NativeStackScreenProps<AppStackParamList, 'Notes'>;
 type NoteCardProps = {
     item: Note;
     onPress: (note: Note) => void;
+    onPressIn: (note: Note) => void;
 };
 
 const NOTE_CARD_HEIGHT = 100;
@@ -37,9 +39,13 @@ const NOTE_CARD_SPACING = 10;
 const NOTES_LIST_PADDING_TOP = 8;
 const NOTES_LIST_PADDING_HORIZONTAL = 20;
 const NOTES_LIST_PADDING_BOTTOM = 20;
-const NoteCard = memo(function NoteCard({ item, onPress }: NoteCardProps) {
+const NoteCard = memo(function NoteCard({ item, onPress, onPressIn }: NoteCardProps) {
     return (
-        <TouchableOpacity style={styles.noteCard} onPress={() => onPress(item)}>
+        <TouchableOpacity
+            style={styles.noteCard}
+            onPress={() => onPress(item)}
+            onPressIn={() => onPressIn(item)}
+        >
             <View style={styles.noteTitleRow}>
                 {item.isPinned && <Text style={styles.pinIndicator}>📌</Text>}
                 <Text style={[styles.noteTitle, item.isPinned && styles.noteTitlePinned]} numberOfLines={1}>
@@ -106,6 +112,10 @@ export function NotesScreen({ navigation, route }: Props) {
     }, [groups]);
 
     const loadGroups = useCallback(async () => {
+        const cached = api.peekGroups(workspaceId);
+        if (cached && cached.length > 0) {
+            setGroups(cached);
+        }
         const groupsData = await api.getGroups(workspaceId);
         setGroups(groupsData);
         // Select "General" group by default on initial load
@@ -119,6 +129,10 @@ export function NotesScreen({ navigation, route }: Props) {
     const trimmedSearch = useMemo(() => searchQuery.trim(), [searchQuery]);
 
     const loadNotes = useCallback(async (groupId: string | null) => {
+        const cached = api.peekNotes(workspaceId, groupId, trimmedSearch);
+        if (cached && cached.length > 0) {
+            setNotes(cached);
+        }
         const notesData = await api.getNotes(workspaceId, groupId, trimmedSearch, { limit: 50 });
         setNotes(notesData);
     }, [workspaceId, trimmedSearch]);
@@ -216,6 +230,10 @@ export function NotesScreen({ navigation, route }: Props) {
         navigation.navigate('NoteEditor', { workspaceId, noteId: note.id, noteTitle: note.title });
     }, [navigation, workspaceId]);
 
+    const handleNotePressIn = useCallback((note: Note) => {
+        void api.getNote(note.id).catch(() => {});
+    }, []);
+
     const handleCreateGroup = async () => {
         if (!newGroupName.trim()) return;
         setIsCreatingGroup(true);
@@ -246,9 +264,9 @@ export function NotesScreen({ navigation, route }: Props) {
 
     const renderNote = useCallback(
         ({ item }: { item: Note }) => (
-            <NoteCard item={item} onPress={handleNotePress} />
+            <NoteCard item={item} onPress={handleNotePress} onPressIn={handleNotePressIn} />
         ),
-        [handleNotePress],
+        [handleNotePress, handleNotePressIn],
     );
 
     const filteredNotes = useMemo(() => {
@@ -317,14 +335,6 @@ export function NotesScreen({ navigation, route }: Props) {
         }
     };
 
-    if (isLoading) {
-        return (
-            <View style={styles.centered}>
-                <ActivityIndicator size="large" color="#3b82f6" />
-            </View>
-        );
-    }
-
     return (
         <View style={styles.container}>
             <BackgroundGlow tint="green" />
@@ -388,9 +398,6 @@ export function NotesScreen({ navigation, route }: Props) {
                                 {filteredNotes.length} note{filteredNotes.length === 1 ? '' : 's'}
                             </Text>
                         </View>
-                        {isNotesLoading && (
-                            <ActivityIndicator size="small" color="#3b82f6" />
-                        )}
                     </View>
                 </View>
 
@@ -413,56 +420,63 @@ export function NotesScreen({ navigation, route }: Props) {
                     </TouchableOpacity>
                 </View>
 
-                <FlatList
-                    data={filteredNotes}
-                    keyExtractor={(item) => item.id}
-                    renderItem={renderNote}
-                    contentContainerStyle={styles.notesList}
-                    getItemLayout={(_, index) => ({
-                        length: NOTE_CARD_HEIGHT + NOTE_CARD_SPACING,
-                        offset: NOTES_LIST_PADDING_TOP + (NOTE_CARD_HEIGHT + NOTE_CARD_SPACING) * index,
-                        index,
-                    })}
-                    initialNumToRender={initialNumToRender}
-                    windowSize={windowSize}
-                    maxToRenderPerBatch={maxToRenderPerBatch}
-                    updateCellsBatchingPeriod={updateCellsBatchingPeriod}
-                    removeClippedSubviews
-                    refreshControl={
-                        <RefreshControl
-                            refreshing={isRefreshing}
-                            onRefresh={async () => {
-                                setIsRefreshing(true);
-                                try {
-                                    const groupsData = await loadGroups();
-                                    const nextGroupId = selectedGroupId ?? groupsData[0]?.id ?? null;
-                                    await loadNotes(nextGroupId);
-                                } catch {
-                                    Alert.alert('Error', 'Failed to load notes');
-                                } finally {
-                                    setIsRefreshing(false);
-                                }
-                            }}
-                            tintColor="#3b82f6"
-                        />
-                    }
-                    ListEmptyComponent={
-                        <View style={styles.empty}>
-                            <View style={styles.emptyCard}>
-                                <Text style={styles.emptyTitle}>No notes yet</Text>
-                                <Text style={styles.emptyText}>Create your first note</Text>
-                                <TouchableOpacity
-                                    style={styles.emptyPrimaryButton}
-                                    onPress={handleCreateNote}
-                                >
-                                    <Text style={styles.emptyPrimaryText}>Create note</Text>
-                                </TouchableOpacity>
+                {isLoading && notes.length === 0 ? (
+                    <NotesListSkeleton />
+                ) : (
+                    <FlatList
+                        data={filteredNotes}
+                        keyExtractor={(item) => item.id}
+                        renderItem={renderNote}
+                        contentContainerStyle={styles.notesList}
+                        getItemLayout={(_, index) => ({
+                            length: NOTE_CARD_HEIGHT + NOTE_CARD_SPACING,
+                            offset: NOTES_LIST_PADDING_TOP + (NOTE_CARD_HEIGHT + NOTE_CARD_SPACING) * index,
+                            index,
+                        })}
+                        initialNumToRender={initialNumToRender}
+                        windowSize={windowSize}
+                        maxToRenderPerBatch={maxToRenderPerBatch}
+                        updateCellsBatchingPeriod={updateCellsBatchingPeriod}
+                        removeClippedSubviews
+                        refreshControl={
+                            <RefreshControl
+                                refreshing={isRefreshing}
+                                onRefresh={async () => {
+                                    setIsRefreshing(true);
+                                    try {
+                                        const groupsData = await loadGroups();
+                                        const nextGroupId = selectedGroupId ?? groupsData[0]?.id ?? null;
+                                        await loadNotes(nextGroupId);
+                                    } catch {
+                                        Alert.alert('Error', 'Failed to load notes');
+                                    } finally {
+                                        setIsRefreshing(false);
+                                    }
+                                }}
+                                tintColor="#3b82f6"
+                            />
+                        }
+                        ListEmptyComponent={
+                            <View style={styles.empty}>
+                                <View style={styles.emptyCard}>
+                                    <Text style={styles.emptyTitle}>No notes yet</Text>
+                                    <Text style={styles.emptyText}>Create your first note</Text>
+                                    <TouchableOpacity
+                                        style={styles.emptyPrimaryButton}
+                                        onPress={handleCreateNote}
+                                    >
+                                        <Text style={styles.emptyPrimaryText}>Create note</Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
-                        </View>
-                    }
-                />
+                        }
+                    />
+                )}
 
-                <TouchableOpacity style={styles.fab} onPress={handleCreateNote}>
+                <TouchableOpacity
+                    style={[styles.fab, { bottom: insets.bottom + 24 }]}
+                    onPress={handleCreateNote}
+                >
                     <Text style={styles.fabText}>+</Text>
                 </TouchableOpacity>
             </Animated.View>
@@ -576,7 +590,10 @@ export function NotesScreen({ navigation, route }: Props) {
                 animationType="fade"
                 onRequestClose={() => setShowInviteModal(false)}
             >
-                <View style={styles.inviteOverlay}>
+                <KeyboardAvoidingView
+                    style={styles.inviteOverlay}
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                >
                     <View style={styles.inviteContent}>
                         <Text style={styles.inviteTitle}>Invite to workspace</Text>
                         <Text style={styles.inviteSubtitle}>Send a secure invite link</Text>
@@ -632,7 +649,7 @@ export function NotesScreen({ navigation, route }: Props) {
                             </TouchableOpacity>
                         </View>
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
 
             <Modal

@@ -1,11 +1,25 @@
 # TeamPad Product Design
 
-Version: 2.0
+Version: 2.1
 Owner: TeamPad PLC
-Status: Active
+Status: Active (mobile-first build)
+
+## 0) Current App State (Mobile)
+Shipped core flows:
+- Auth (signup/login/OTP/reset)
+- Workspaces, collections, notes (create/edit/pin/search)
+- Realtime chat with reactions
+- Invites + member list
+- Profile + settings
+
+Planned/experimental (not shipped in mobile UI):
+- AI assistant
+- Voice notes
+- Focus mode
+- Team pulse
 
 ## 1) Product Definition
-TeamPad is a calm, fast workspace for teams to capture, organize, and share knowledge. It centers on the workspace -> collection -> note model, with a built-in realtime chat for coordination and a focused AI helper for drafting, summaries, and insights.
+TeamPad is a calm, fast workspace for teams to capture, organize, and share knowledge. It centers on the workspace → collection → note model, with a built-in realtime chat for coordination. AI assistance is planned but not part of the current mobile UI.
 
 ### Product Promise
 - Capture fast, organize once.
@@ -26,7 +40,7 @@ TeamPad is a calm, fast workspace for teams to capture, organize, and share know
 - Capture notes quickly during work.
 - Keep workspaces tidy without complex hierarchy.
 - Share context with teammates and keep everyone aligned.
-- Use AI to speed up drafts and summaries without losing control.
+- Keep workspaces calm and predictable on mobile.
 
 ## 5) Information Architecture
 - User
@@ -43,41 +57,35 @@ TeamPad is a calm, fast workspace for teams to capture, organize, and share know
 2. Invite teammate -> Member joins -> Shared notes + chat.
 3. Search or filter -> Open note -> Edit -> Version captured.
 4. Chat -> Mention teammate -> Unread count -> Read clears.
-5. AI panel -> Ask about workspace or note -> Draft content -> User accepts.
-6. **Voice Note**: Record -> Listen (with scrubber) -> Send "Walkie-Talkie" style.
-7. **Zen Mode**: Toggle Focus Mode -> Distraction-free writing.
-8. **Team Pulse**: Update status emoji -> Team sees vibe instantly.
+5. (Planned) AI panel -> Ask about workspace or note -> Draft content -> User accepts.
+6. (Planned) Voice Note: Record -> Listen -> Send.
+7. (Planned) Focus Mode: Distraction-free writing.
+8. (Planned) Team Pulse: Update status emoji.
 
 ## 7) Feature Inventory
-### Notes
-- Rich text editor
-- Tags, pinning
-- Attachments
-- Version history and restore
-- Public note share link (with expiry)
+### Notes (current)
+- Title + body editor
+- Pinning + search
+- Fast list previews
 
 ### Workspaces
 - Workspace switcher
 - Role-based access
 - Collection management
 
-### Chat (per workspace)
+### Chat (current)
 - Realtime messaging
-- Mentions + mention notifications
 - Reactions
-- Image uploads
-- Unread counts
-- 1,000 message retention
+- Typing indicators
 
-### AI
-- Workspace and note-aware assistant
-- Vector search support via Supabase pgvector
+### AI (planned / server-ready)
+- Vector store notes (pgvector)
 - Provider switch (mock or Gemini)
 
-### Distinctive Features (Better than Notion)
-- **Voice Notes**: "WhatsApp-style" player, scrubbable history, avatar integrated.
-- **Focus Mode**: One-click "Zen Mode" to hide UI.
-- **Team Pulse**: integrated status and emoji vibe check.
+### Distinctive Features (planned)
+- Voice Notes
+- Focus Mode
+- Team Pulse
 
 ### Admin and Billing
 - Plans: free, premium, premium+
@@ -116,7 +124,7 @@ TeamPad is a calm, fast workspace for teams to capture, organize, and share know
 
 ## 11) UX Principles
 - Calm over clutter.
-- One task per surface: notes, chat, AI panel.
+- One task per surface: notes and chat (AI planned).
 - Soft borders, consistent spacing, and predictable focus states.
 - Always show state: syncing, unread, online, pending.
 
