@@ -15,6 +15,7 @@
     "@react-navigation/native": "^7.1.28",
     "@react-navigation/native-stack": "^7.10.1",
     "@tanstack/react-query": "^5.90.19",
+    "ably": "^2.17.0",
     "expo": "~54.0.31",
     "expo-haptics": "~15.0.8",
     "expo-secure-store": "~15.0.8",

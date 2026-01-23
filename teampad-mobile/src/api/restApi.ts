@@ -78,6 +78,16 @@ type RawChatMessage = Omit<ChatMessage, 'createdAt' | 'editedAt' | 'deletedAt' |
     mentions?: ChatMention[];
 };
 
+type AblyTokenRequest = {
+    keyName: string;
+    nonce: string;
+    mac: string;
+    timestamp: number;
+    clientId?: string;
+    ttl?: number;
+    capability?: string;
+};
+
 if (!process.env.EXPO_PUBLIC_API_URL && isDev) {
     console.warn(
         'EXPO_PUBLIC_API_URL is not set. Using localhost may fail on Expo Go devices. Set it in your env.'
@@ -420,6 +430,24 @@ export const restApi = {
             `/workspaces/${workspaceId}/chat/messages${query ? `?${query}` : ''}`
         );
         return data.map(normalizeChatMessage);
+    },
+
+    async getAblyToken(): Promise<AblyTokenRequest> {
+        return request<AblyTokenRequest>('/ably/auth');
+    },
+
+    async getAblyTokenRaw(): Promise<AblyTokenRequest> {
+        const authToken = await getAuthToken();
+        const res = await fetch(`${API_URL}/ably/auth`, {
+            headers: {
+                'Content-Type': 'application/json',
+                ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+            },
+        });
+        if (!res.ok) {
+            throw new Error('Failed to fetch Ably token');
+        }
+        return res.json() as Promise<AblyTokenRequest>;
     },
 
     async createChatMessage(input: {

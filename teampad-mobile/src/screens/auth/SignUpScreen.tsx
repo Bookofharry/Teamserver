@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     View,
     Text,
@@ -8,13 +8,16 @@ import {
     KeyboardAvoidingView,
     Platform,
     ActivityIndicator,
-    Alert,
     Dimensions,
     Image,
+    Modal,
+    Animated,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '../../navigation';
+import { BackgroundGlow } from '../../components/BackgroundGlow';
+import { createSlideUp, getAnimatedStyle } from '../../utils/animations';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'SignUp'>;
 
@@ -44,20 +47,28 @@ const GridBackground = () => {
 };
 
 export function SignUpScreen({ navigation }: Props) {
+    const introAnim = useRef(createSlideUp(260, 12)).current;
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [showErrorModal, setShowErrorModal] = useState(false);
+    const [errorMessage, setErrorMessage] = useState('Please try again.');
     const { requestSignupOtp } = useAuth();
+
+    const showError = (message: string) => {
+        setErrorMessage(message);
+        setShowErrorModal(true);
+    };
 
     const handleSignUp = async () => {
         if (!name.trim() || !email.trim() || !password.trim()) {
-            Alert.alert('Error', 'Please fill in all fields');
+            showError('Please fill in all fields.');
             return;
         }
 
         if (password.length < 8) {
-            Alert.alert('Error', 'Password must be at least 8 characters');
+            showError('Password must be at least 8 characters.');
             return;
         }
 
@@ -71,11 +82,15 @@ export function SignUpScreen({ navigation }: Props) {
                 password,
             });
         } catch (error) {
-            Alert.alert('Error', error instanceof Error ? error.message : 'Please try again');
+            showError(error instanceof Error ? error.message : 'Please try again.');
         } finally {
             setIsLoading(false);
         }
     };
+
+    useEffect(() => {
+        introAnim.start();
+    }, [introAnim]);
 
     return (
         <KeyboardAvoidingView
@@ -83,7 +98,8 @@ export function SignUpScreen({ navigation }: Props) {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
             <GridBackground />
-            <View style={styles.content}>
+            <BackgroundGlow tint="blue" />
+            <Animated.View style={[styles.content, getAnimatedStyle(introAnim.opacity, introAnim.translateY)]}>
                 <View style={styles.logoContainer}>
                     <Image
                         source={require('../../../assets/images/teampad-logo.png')}
@@ -142,7 +158,32 @@ export function SignUpScreen({ navigation }: Props) {
                         <Text style={styles.footerLink}>Sign in</Text>
                     </TouchableOpacity>
                 </View>
-            </View>
+            </Animated.View>
+
+            <Modal
+                visible={showErrorModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowErrorModal(false)}
+            >
+                <View style={styles.errorOverlay}>
+                    <View style={styles.errorContent}>
+                        <View style={styles.errorIconCircle}>
+                            <Text style={styles.errorIcon}>⚠️</Text>
+                        </View>
+                        <Text style={styles.errorTitle}>Sign up failed</Text>
+                        <Text style={styles.errorSubtitle}>{errorMessage}</Text>
+                        <View style={styles.errorButtons}>
+                            <TouchableOpacity
+                                style={styles.errorPrimaryButton}
+                                onPress={() => setShowErrorModal(false)}
+                            >
+                                <Text style={styles.errorPrimaryText}>Try again</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </KeyboardAvoidingView>
     );
 }
@@ -241,5 +282,61 @@ const styles = StyleSheet.create({
         color: '#3b82f6',
         fontSize: 14,
         fontWeight: '500',
+    },
+    errorOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 24,
+    },
+    errorContent: {
+        width: '100%',
+        backgroundColor: '#111',
+        borderRadius: 20,
+        padding: 28,
+        borderWidth: 1,
+        borderColor: '#222',
+        alignItems: 'center',
+    },
+    errorIconCircle: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        backgroundColor: 'rgba(239, 68, 68, 0.15)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    errorIcon: {
+        fontSize: 24,
+    },
+    errorTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#fff',
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    errorSubtitle: {
+        fontSize: 14,
+        color: '#8b8f94',
+        marginBottom: 24,
+        textAlign: 'center',
+    },
+    errorButtons: {
+        width: '100%',
+    },
+    errorPrimaryButton: {
+        width: '100%',
+        padding: 14,
+        borderRadius: 12,
+        backgroundColor: '#ef4444',
+        alignItems: 'center',
+    },
+    errorPrimaryText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
     },
 });

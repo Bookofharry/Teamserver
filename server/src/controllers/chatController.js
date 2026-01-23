@@ -20,6 +20,7 @@ import {
 } from '../dto/responses/chat.js'
 import { sendMentionEmail } from '../utils/email.js'
 import logger from '../utils/logger.js'
+import { publishChatRoomEvent } from '../utils/ablyChat.js'
 
 const CHAT_BUCKET = process.env.CHAT_STORAGE_BUCKET || 'workspace-chat'
 const CHAT_UPLOAD_TTL_SECONDS = 300
@@ -435,6 +436,9 @@ export const createChatMessage = async (req, res) => {
   const data = mapMessageRow(messageRow, profileRow, attachmentData, reactions, mentionsList)
 
   res.status(201).json({ data })
+
+  publishChatRoomEvent(`workspace:${workspaceId}`, { type: 'message.created', message: data })
+    .catch(() => { })
 }
 
 export const getChatUnreadCounts = async (req, res) => {
@@ -955,6 +959,9 @@ export const deleteChatMessage = async (req, res) => {
   const data = mapMessageRow(updatedRow, profileRow, [], [], [])
 
   res.json({ data })
+
+  publishChatRoomEvent(`workspace:${workspaceId}`, { type: 'message.deleted', message: data })
+    .catch(() => { })
 }
 
 export const markChatMentionsRead = async (req, res) => {

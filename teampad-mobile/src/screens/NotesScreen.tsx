@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { memo, useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
     View,
     Text,
@@ -12,17 +12,74 @@ import {
     Modal,
     KeyboardAvoidingView,
     Platform,
+    Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '../api/restApi';
+import { BackgroundGlow } from '../components/BackgroundGlow';
+import { createSlideUp, getAnimatedStyle } from '../utils/animations';
 import type { Note, Group } from '../types';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AppStackParamList } from '../navigation';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'Notes'>;
 
+type GroupTabProps = {
+    item: Group;
+    isSelected: boolean;
+    onSelect: (groupId: string) => void;
+};
+
+const GroupTab = memo(function GroupTab({ item, isSelected, onSelect }: GroupTabProps) {
+    return (
+        <TouchableOpacity
+            style={[
+                styles.groupTab,
+                isSelected && styles.groupTabActive,
+            ]}
+            onPress={() => onSelect(item.id)}
+        >
+            <View style={[styles.groupDot, { backgroundColor: item.color || '#3b82f6' }]} />
+            <Text
+                style={[
+                    styles.groupTabText,
+                    isSelected && styles.groupTabTextActive,
+                ]}
+                numberOfLines={1}
+            >
+                {item.name}
+            </Text>
+        </TouchableOpacity>
+    );
+});
+
+type NoteCardProps = {
+    item: Note;
+    onPress: (note: Note) => void;
+};
+
+const NoteCard = memo(function NoteCard({ item, onPress }: NoteCardProps) {
+    return (
+        <TouchableOpacity style={styles.noteCard} onPress={() => onPress(item)}>
+            <View style={styles.noteTitleRow}>
+                {item.isPinned && <Text style={styles.pinIndicator}>📌</Text>}
+                <Text style={[styles.noteTitle, item.isPinned && styles.noteTitlePinned]} numberOfLines={1}>
+                    {item.title || 'Untitled'}
+                </Text>
+            </View>
+            <Text style={styles.notePreview} numberOfLines={2}>
+                {item.bodyPreview || item.body || 'No content'}
+            </Text>
+            <Text style={styles.noteDate}>
+                {new Date(item.updatedAt).toLocaleDateString()}
+            </Text>
+        </TouchableOpacity>
+    );
+});
+
 export function NotesScreen({ navigation, route }: Props) {
     const insets = useSafeAreaInsets();
+    const introAnim = useRef(createSlideUp(260, 12)).current;
     const { workspaceId, workspaceName } = route.params;
     const [notes, setNotes] = useState<Note[]>([]);
     const [groups, setGroups] = useState<Group[]>([]);
@@ -111,6 +168,10 @@ export function NotesScreen({ navigation, route }: Props) {
         navigation.setOptions({ title: workspaceName || 'Notes' });
     }, [navigation, workspaceName]);
 
+    useEffect(() => {
+        introAnim.start();
+    }, [introAnim]);
+
     const handleCreateNote = async () => {
         if (!selectedGroupId) {
             if (groups.length === 0) {
@@ -143,9 +204,9 @@ export function NotesScreen({ navigation, route }: Props) {
         }
     };
 
-    const handleNotePress = (note: Note) => {
+    const handleNotePress = useCallback((note: Note) => {
         navigation.navigate('NoteEditor', { workspaceId, noteId: note.id, noteTitle: note.title });
-    };
+    }, [navigation, workspaceId]);
 
     const handleCreateGroup = async () => {
         if (!newGroupName.trim()) return;
@@ -166,42 +227,26 @@ export function NotesScreen({ navigation, route }: Props) {
         }
     };
 
-    const renderGroup = ({ item }: { item: Group }) => (
-        <TouchableOpacity
-            style={[
-                styles.groupTab,
-                selectedGroupId === item.id && styles.groupTabActive,
-            ]}
-            onPress={() => setSelectedGroupId(item.id)}
-        >
-            <View style={[styles.groupDot, { backgroundColor: item.color || '#3b82f6' }]} />
-            <Text
-                style={[
-                    styles.groupTabText,
-                    selectedGroupId === item.id && styles.groupTabTextActive,
-                ]}
-                numberOfLines={1}
-            >
-                {item.name}
-            </Text>
-        </TouchableOpacity>
+    const handleGroupSelect = useCallback((groupId: string) => {
+        setSelectedGroupId(groupId);
+    }, []);
+
+    const renderGroup = useCallback(
+        ({ item }: { item: Group }) => (
+            <GroupTab
+                item={item}
+                isSelected={selectedGroupId === item.id}
+                onSelect={handleGroupSelect}
+            />
+        ),
+        [handleGroupSelect, selectedGroupId],
     );
 
-    const renderNote = ({ item }: { item: Note }) => (
-        <TouchableOpacity style={styles.noteCard} onPress={() => handleNotePress(item)}>
-            <View style={styles.noteTitleRow}>
-                {item.isPinned && <Text style={styles.pinIndicator}>📌</Text>}
-                <Text style={[styles.noteTitle, item.isPinned && styles.noteTitlePinned]} numberOfLines={1}>
-                    {item.title || 'Untitled'}
-                </Text>
-            </View>
-            <Text style={styles.notePreview} numberOfLines={2}>
-                {item.bodyPreview || item.body || 'No content'}
-            </Text>
-            <Text style={styles.noteDate}>
-                {new Date(item.updatedAt).toLocaleDateString()}
-            </Text>
-        </TouchableOpacity>
+    const renderNote = useCallback(
+        ({ item }: { item: Note }) => (
+            <NoteCard item={item} onPress={handleNotePress} />
+        ),
+        [handleNotePress],
     );
 
     if (isLoading) {
@@ -224,78 +269,95 @@ export function NotesScreen({ navigation, route }: Props) {
 
     return (
         <View style={styles.container}>
-            <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-                <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-                    <Text style={styles.backText}>← Back</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={styles.chatButton}
-                    onPress={() => navigation.navigate('Chat', { workspaceId, workspaceName })}
-                >
-                    <Text style={styles.chatButtonText}>💬 Chat</Text>
-                </TouchableOpacity>
-            </View>
+            <BackgroundGlow tint="green" />
+            <Animated.View style={[styles.content, getAnimatedStyle(introAnim.opacity, introAnim.translateY)]}>
+                <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+                    <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+                        <Text style={styles.backText}>← Back</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.chatButton}
+                        onPress={() => navigation.navigate('Chat', { workspaceId, workspaceName })}
+                    >
+                        <Text style={styles.chatButtonText}>💬 Chat</Text>
+                    </TouchableOpacity>
+                </View>
 
-            <TextInput
-                style={styles.searchInput}
-                placeholder="Search notes..."
-                placeholderTextColor="#666"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-            />
-
-            <View style={styles.groupsRow}>
-                <FlatList
-                    horizontal
-                    data={sortedGroups}
-                    keyExtractor={(item) => item.id}
-                    renderItem={renderGroup}
-                    style={styles.groupsList}
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.groupsContent}
+                <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search notes..."
+                    placeholderTextColor="#666"
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
                 />
-                <TouchableOpacity
-                    style={styles.addGroupButton}
-                    onPress={() => setShowCreateGroupModal(true)}
-                >
-                    <Text style={styles.addGroupButtonText}>+</Text>
-                </TouchableOpacity>
-            </View>
 
-            <FlatList
-                data={filteredNotes}
-                keyExtractor={(item) => item.id}
-                renderItem={renderNote}
-                contentContainerStyle={styles.notesList}
-                refreshControl={
-                    <RefreshControl
-                        refreshing={isRefreshing}
-                        onRefresh={async () => {
-                            setIsRefreshing(true);
-                            try {
-                                const groupsData = await loadGroups();
-                                const nextGroupId = selectedGroupId ?? groupsData[0]?.id ?? null;
-                                await loadNotes(nextGroupId);
-                            } catch {
-                                Alert.alert('Error', 'Failed to load notes');
-                            } finally {
-                                setIsRefreshing(false);
-                            }
-                        }}
-                        tintColor="#3b82f6"
+                <View style={styles.groupsRow}>
+                    <FlatList
+                        horizontal
+                        data={sortedGroups}
+                        keyExtractor={(item) => item.id}
+                        renderItem={renderGroup}
+                        style={styles.groupsList}
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.groupsContent}
+                        initialNumToRender={6}
                     />
-                }
-                ListEmptyComponent={
-                    <View style={styles.empty}>
-                        <Text style={styles.emptyTitle}>No notes yet</Text>
-                        <Text style={styles.emptyText}>Create your first note</Text>
-                    </View>
-                }
-            />
+                    <TouchableOpacity
+                        style={styles.addGroupButton}
+                        onPress={() => setShowCreateGroupModal(true)}
+                    >
+                        <Text style={styles.addGroupButtonText}>+</Text>
+                    </TouchableOpacity>
+                </View>
 
-            <TouchableOpacity style={styles.fab} onPress={handleCreateNote}>
-                <Text style={styles.fabText}>+</Text>
-            </TouchableOpacity>
+                <FlatList
+                    data={filteredNotes}
+                    keyExtractor={(item) => item.id}
+                    renderItem={renderNote}
+                    contentContainerStyle={styles.notesList}
+                    initialNumToRender={8}
+                    windowSize={9}
+                    maxToRenderPerBatch={8}
+                    updateCellsBatchingPeriod={50}
+                    removeClippedSubviews
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={isRefreshing}
+                            onRefresh={async () => {
+                                setIsRefreshing(true);
+                                try {
+                                    const groupsData = await loadGroups();
+                                    const nextGroupId = selectedGroupId ?? groupsData[0]?.id ?? null;
+                                    await loadNotes(nextGroupId);
+                                } catch {
+                                    Alert.alert('Error', 'Failed to load notes');
+                                } finally {
+                                    setIsRefreshing(false);
+                                }
+                            }}
+                            tintColor="#3b82f6"
+                        />
+                    }
+                    ListEmptyComponent={
+                        <View style={styles.empty}>
+                            <View style={styles.emptyCard}>
+                                <Text style={styles.emptyTitle}>No notes yet</Text>
+                                <Text style={styles.emptyText}>Create your first note</Text>
+                                <TouchableOpacity
+                                    style={styles.emptyPrimaryButton}
+                                    onPress={handleCreateNote}
+                                >
+                                    <Text style={styles.emptyPrimaryText}>Create note</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    }
+                />
+
+                <TouchableOpacity style={styles.fab} onPress={handleCreateNote}>
+                    <Text style={styles.fabText}>+</Text>
+                </TouchableOpacity>
+            </Animated.View>
 
             {/* Create Group Modal */}
             <Modal
@@ -357,6 +419,10 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#0a0a0a',
     },
+    content: {
+        flex: 1,
+        zIndex: 1,
+    },
     centered: {
         flex: 1,
         justifyContent: 'center',
@@ -371,20 +437,25 @@ const styles = StyleSheet.create({
         paddingBottom: 12,
     },
     backButton: {
-        padding: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+        backgroundColor: '#141414',
+        borderWidth: 1,
+        borderColor: '#262626',
     },
     backText: {
-        color: '#3b82f6',
-        fontSize: 16,
-        fontWeight: '500',
+        color: '#dbeafe',
+        fontSize: 14,
+        fontWeight: '600',
     },
     chatButton: {
-        backgroundColor: '#1a1a1a',
+        backgroundColor: '#141414',
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderRadius: 20,
         borderWidth: 1,
-        borderColor: '#333',
+        borderColor: '#262626',
     },
     chatButtonText: {
         color: '#fff',
@@ -436,7 +507,7 @@ const styles = StyleSheet.create({
     },
     groupTabText: {
         color: '#888',
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: '500',
         flexShrink: 1,
     },
@@ -448,12 +519,12 @@ const styles = StyleSheet.create({
         paddingTop: 8,
     },
     noteCard: {
-        backgroundColor: '#1a1a1a',
+        backgroundColor: '#141414',
         borderRadius: 12,
         padding: 14,
         marginBottom: 10,
         borderWidth: 1,
-        borderColor: '#333',
+        borderColor: '#262626',
     },
     noteTitle: {
         fontSize: 16,
@@ -462,14 +533,14 @@ const styles = StyleSheet.create({
         marginBottom: 6,
     },
     notePreview: {
-        fontSize: 13,
-        color: '#888',
+        fontSize: 12,
+        color: '#9aa0a6',
         lineHeight: 18,
         marginBottom: 8,
     },
     noteDate: {
-        fontSize: 11,
-        color: '#666',
+        fontSize: 12,
+        color: '#7c7f85',
     },
     noteTitleRow: {
         flexDirection: 'row',
@@ -487,15 +558,37 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingTop: 60,
     },
+    emptyCard: {
+        width: '100%',
+        backgroundColor: '#111',
+        borderRadius: 18,
+        padding: 20,
+        borderWidth: 1,
+        borderColor: '#222',
+        alignItems: 'center',
+    },
     emptyTitle: {
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: '600',
         color: '#fff',
         marginBottom: 8,
     },
     emptyText: {
-        fontSize: 16,
+        fontSize: 14,
         color: '#888',
+        textAlign: 'center',
+        marginBottom: 16,
+    },
+    emptyPrimaryButton: {
+        paddingHorizontal: 18,
+        paddingVertical: 10,
+        borderRadius: 12,
+        backgroundColor: '#10b981',
+    },
+    emptyPrimaryText: {
+        color: '#0a0a0a',
+        fontSize: 14,
+        fontWeight: '700',
     },
     fab: {
         position: 'absolute',

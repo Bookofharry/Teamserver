@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     View,
     Text,
@@ -9,16 +9,20 @@ import {
     Alert,
     Modal,
     Linking,
+    Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { haptics } from '../utils/haptics';
+import { BackgroundGlow } from '../components/BackgroundGlow';
+import { createSlideUp, getAnimatedStyle } from '../utils/animations';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AppStackParamList } from '../navigation';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'Settings'>;
 
 export function SettingsScreen({ navigation }: Props) {
+    const introAnim = useRef(createSlideUp(260, 12)).current;
     const insets = useSafeAreaInsets();
     const { user } = useAuth();
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -73,8 +77,14 @@ export function SettingsScreen({ navigation }: Props) {
         );
     };
 
+    useEffect(() => {
+        introAnim.start();
+    }, [introAnim]);
+
     return (
         <View style={styles.container}>
+            <BackgroundGlow tint="blue" />
+            <Animated.View style={[styles.content, getAnimatedStyle(introAnim.opacity, introAnim.translateY)]}>
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
                 <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
@@ -84,7 +94,7 @@ export function SettingsScreen({ navigation }: Props) {
                 <View style={styles.headerRight} />
             </View>
 
-            <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+            <ScrollView style={styles.scroll} contentContainerStyle={styles.contentContainer}>
                 {/* Notifications Section */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Notifications</Text>
@@ -247,6 +257,7 @@ export function SettingsScreen({ navigation }: Props) {
                     </View>
                 </View>
             </Modal>
+            </Animated.View>
         </View>
     );
 }
@@ -255,6 +266,10 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#0a0a0a',
+    },
+    content: {
+        flex: 1,
+        zIndex: 1,
     },
     header: {
         flexDirection: 'row',
@@ -266,11 +281,17 @@ const styles = StyleSheet.create({
         borderBottomColor: '#1a1a1a',
     },
     backButton: {
-        padding: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+        backgroundColor: '#141414',
+        borderWidth: 1,
+        borderColor: '#262626',
     },
     backText: {
-        color: '#3b82f6',
-        fontSize: 16,
+        color: '#dbeafe',
+        fontSize: 14,
+        fontWeight: '600',
     },
     headerTitle: {
         fontSize: 18,
@@ -280,7 +301,7 @@ const styles = StyleSheet.create({
     headerRight: {
         width: 60,
     },
-    content: {
+    scroll: {
         flex: 1,
     },
     contentContainer: {
@@ -315,7 +336,7 @@ const styles = StyleSheet.create({
         marginBottom: 2,
     },
     settingDescription: {
-        fontSize: 13,
+        fontSize: 12,
         color: '#666',
     },
     settingArrow: {
@@ -398,7 +419,7 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     modalDescription: {
-        fontSize: 15,
+        fontSize: 14,
         color: '#888',
         textAlign: 'center',
         lineHeight: 22,
@@ -413,7 +434,7 @@ const styles = StyleSheet.create({
     },
     modalCloseText: {
         color: '#fff',
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: '600',
     },
 });

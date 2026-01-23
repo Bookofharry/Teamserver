@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
     View,
     Text,
@@ -12,19 +12,53 @@ import {
     TextInput,
     KeyboardAvoidingView,
     Platform,
+    Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '../api/restApi';
 import { useAuth } from '../context/AuthContext';
 import { haptics } from '../utils/haptics';
+import { BackgroundGlow } from '../components/BackgroundGlow';
+import { createSlideUp, getAnimatedStyle } from '../utils/animations';
 import type { Workspace } from '../types';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AppStackParamList } from '../navigation';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'Workspaces'>;
 
+type WorkspaceRowProps = {
+    item: Workspace;
+    onPress: (workspace: Workspace) => void;
+    onLongPress: (workspace: Workspace) => void;
+};
+
+const WorkspaceRow = memo(function WorkspaceRow({ item, onPress, onLongPress }: WorkspaceRowProps) {
+    return (
+        <TouchableOpacity
+            style={styles.workspaceCard}
+            onPress={() => onPress(item)}
+            onLongPress={() => onLongPress(item)}
+            delayLongPress={500}
+        >
+            <View style={styles.workspaceIcon}>
+                <Text style={styles.workspaceInitial}>
+                    {item.name.charAt(0).toUpperCase() || 'W'}
+                </Text>
+            </View>
+            <View style={styles.workspaceInfo}>
+                <Text style={styles.workspaceName}>{item.name || 'Untitled Workspace'}</Text>
+                <Text style={styles.workspaceMeta}>
+                    {(item.memberCount ?? item.members?.length ?? 0)} member
+                    {(item.memberCount ?? item.members?.length ?? 0) !== 1 ? 's' : ''}
+                </Text>
+            </View>
+        </TouchableOpacity>
+    );
+});
+
 export function WorkspacesScreen({ navigation }: Props) {
     const insets = useSafeAreaInsets();
+    const introAnim = useRef(createSlideUp(260, 12)).current;
     const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -60,6 +94,10 @@ export function WorkspacesScreen({ navigation }: Props) {
         loadWorkspaces();
     }, []);
 
+    useEffect(() => {
+        introAnim.start();
+    }, [introAnim]);
+
     const handleCreateWorkspace = async () => {
         const name = newWorkspaceName.trim() || 'New Workspace';
         setIsCreating(true);
@@ -81,11 +119,11 @@ export function WorkspacesScreen({ navigation }: Props) {
         logout();
     };
 
-    const handleWorkspaceLongPress = (workspace: Workspace) => {
+    const handleWorkspaceLongPress = useCallback((workspace: Workspace) => {
         haptics.medium();
         setSelectedWorkspace(workspace);
         setShowActionsModal(true);
-    };
+    }, []);
 
     const handleRenameWorkspace = () => {
         if (!selectedWorkspace) return;
@@ -133,26 +171,22 @@ export function WorkspacesScreen({ navigation }: Props) {
         }
     };
 
-    const renderWorkspace = ({ item }: { item: Workspace }) => (
-        <TouchableOpacity
-            style={styles.workspaceCard}
-            onPress={() => navigation.navigate('Notes', { workspaceId: item.id, workspaceName: item.name })}
-            onLongPress={() => handleWorkspaceLongPress(item)}
-            delayLongPress={500}
-        >
-            <View style={styles.workspaceIcon}>
-                <Text style={styles.workspaceInitial}>
-                    {item.name.charAt(0).toUpperCase() || 'W'}
-                </Text>
-            </View>
-            <View style={styles.workspaceInfo}>
-                <Text style={styles.workspaceName}>{item.name || 'Untitled Workspace'}</Text>
-                <Text style={styles.workspaceMeta}>
-                    {(item.memberCount ?? item.members?.length ?? 0)} member
-                    {(item.memberCount ?? item.members?.length ?? 0) !== 1 ? 's' : ''}
-                </Text>
-            </View>
-        </TouchableOpacity>
+    const handleWorkspacePress = useCallback(
+        (workspace: Workspace) => {
+            navigation.navigate('Notes', { workspaceId: workspace.id, workspaceName: workspace.name });
+        },
+        [navigation],
+    );
+
+    const renderWorkspace = useCallback(
+        ({ item }: { item: Workspace }) => (
+            <WorkspaceRow
+                item={item}
+                onPress={handleWorkspacePress}
+                onLongPress={handleWorkspaceLongPress}
+            />
+        ),
+        [handleWorkspacePress, handleWorkspaceLongPress],
     );
 
     if (isLoading) {
@@ -165,47 +199,65 @@ export function WorkspacesScreen({ navigation }: Props) {
 
     return (
         <View style={styles.container}>
-            <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-                <View>
-                    <Text style={styles.greeting}>Hello, {user?.name?.split(' ')[0] || 'there'} 👋</Text>
-                    <Text style={styles.title}>Your Workspaces</Text>
-                </View>
-                <TouchableOpacity
-                    style={styles.profileButton}
-                    onPress={() => {
-                        haptics.light();
-                        navigation.navigate('Profile');
-                    }}
-                >
-                    <Text style={styles.profileInitial}>
-                        {user?.name?.charAt(0).toUpperCase() || '?'}
-                    </Text>
-                </TouchableOpacity>
-            </View>
-
-            <FlatList
-                data={workspaces}
-                keyExtractor={(item) => item.id}
-                renderItem={renderWorkspace}
-                contentContainerStyle={styles.list}
-                refreshControl={
-                    <RefreshControl
-                        refreshing={isRefreshing}
-                        onRefresh={() => loadWorkspaces(true)}
-                        tintColor="#3b82f6"
-                    />
-                }
-                ListEmptyComponent={
-                    <View style={styles.empty}>
-                        <Text style={styles.emptyTitle}>No workspaces yet</Text>
-                        <Text style={styles.emptyText}>Create your first workspace to get started</Text>
+            <BackgroundGlow tint="blue" />
+            <Animated.View style={[styles.content, getAnimatedStyle(introAnim.opacity, introAnim.translateY)]}>
+                <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+                    <View>
+                        <Text style={styles.greeting}>Hello, {user?.name?.split(' ')[0] || 'there'} 👋</Text>
+                        <Text style={styles.title}>Your Workspaces</Text>
                     </View>
-                }
-            />
+                    <TouchableOpacity
+                        style={styles.profileButton}
+                        onPress={() => {
+                            haptics.light();
+                            navigation.navigate('Profile');
+                        }}
+                    >
+                        <Text style={styles.profileInitial}>
+                            {user?.name?.charAt(0).toUpperCase() || '?'}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
 
-            <TouchableOpacity style={styles.fab} onPress={() => setShowCreateModal(true)}>
-                <Text style={styles.fabText}>+</Text>
-            </TouchableOpacity>
+                <FlatList
+                    data={workspaces}
+                    keyExtractor={(item) => item.id}
+                    renderItem={renderWorkspace}
+                    contentContainerStyle={styles.list}
+                    initialNumToRender={6}
+                    windowSize={7}
+                    maxToRenderPerBatch={8}
+                    updateCellsBatchingPeriod={50}
+                    removeClippedSubviews
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={isRefreshing}
+                            onRefresh={() => loadWorkspaces(true)}
+                            tintColor="#3b82f6"
+                        />
+                    }
+                    ListEmptyComponent={
+                        <View style={styles.empty}>
+                            <View style={styles.emptyCard}>
+                                <Text style={styles.emptyTitle}>No workspaces yet</Text>
+                                <Text style={styles.emptyText}>
+                                    Create your first workspace to get started
+                                </Text>
+                                <TouchableOpacity
+                                    style={styles.emptyPrimaryButton}
+                                    onPress={() => setShowCreateModal(true)}
+                                >
+                                    <Text style={styles.emptyPrimaryText}>Create workspace</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    }
+                />
+
+                <TouchableOpacity style={styles.fab} onPress={() => setShowCreateModal(true)}>
+                    <Text style={styles.fabText}>+</Text>
+                </TouchableOpacity>
+            </Animated.View>
 
             {/* Branded Create Workspace Modal */}
             <Modal
@@ -428,6 +480,10 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#0a0a0a',
     },
+    content: {
+        flex: 1,
+        zIndex: 1,
+    },
     centered: {
         flex: 1,
         justifyContent: 'center',
@@ -441,12 +497,12 @@ const styles = StyleSheet.create({
         padding: 20,
     },
     greeting: {
-        fontSize: 16,
-        color: '#888',
+        fontSize: 12,
+        color: '#9aa0a6',
         marginBottom: 4,
     },
     title: {
-        fontSize: 28,
+        fontSize: 24,
         fontWeight: '700',
         color: '#fff',
     },
@@ -465,12 +521,12 @@ const styles = StyleSheet.create({
     workspaceCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#1a1a1a',
+        backgroundColor: '#141414',
         borderRadius: 16,
         padding: 16,
         marginBottom: 12,
         borderWidth: 1,
-        borderColor: '#333',
+        borderColor: '#262626',
     },
     workspaceIcon: {
         width: 48,
@@ -497,21 +553,43 @@ const styles = StyleSheet.create({
     },
     workspaceMeta: {
         fontSize: 14,
-        color: '#888',
+        color: '#9aa0a6',
     },
     empty: {
         alignItems: 'center',
         paddingTop: 60,
     },
+    emptyCard: {
+        width: '100%',
+        backgroundColor: '#111',
+        borderRadius: 18,
+        padding: 20,
+        borderWidth: 1,
+        borderColor: '#222',
+        alignItems: 'center',
+    },
     emptyTitle: {
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: '600',
         color: '#fff',
         marginBottom: 8,
     },
     emptyText: {
-        fontSize: 16,
+        fontSize: 14,
         color: '#888',
+        textAlign: 'center',
+        marginBottom: 16,
+    },
+    emptyPrimaryButton: {
+        paddingHorizontal: 18,
+        paddingVertical: 10,
+        borderRadius: 12,
+        backgroundColor: '#3b82f6',
+    },
+    emptyPrimaryText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
     },
     profileButton: {
         width: 44,
@@ -678,7 +756,7 @@ const styles = StyleSheet.create({
     },
     logoutCancelText: {
         color: '#3b82f6',
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: '600',
     },
     logoutConfirmButton: {
@@ -692,7 +770,7 @@ const styles = StyleSheet.create({
     },
     logoutConfirmText: {
         color: '#888',
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: '600',
     },
     // Delete modal styles
@@ -754,7 +832,7 @@ const styles = StyleSheet.create({
     },
     deleteCancelText: {
         color: '#888',
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: '600',
     },
     deleteConfirmButton: {
@@ -766,7 +844,7 @@ const styles = StyleSheet.create({
     },
     deleteConfirmText: {
         color: '#fff',
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: '600',
     },
     // Action Sheet styles
@@ -803,7 +881,7 @@ const styles = StyleSheet.create({
         marginRight: 12,
     },
     actionSheetButtonText: {
-        fontSize: 17,
+        fontSize: 16,
         color: '#fff',
     },
     actionSheetDeleteText: {
@@ -817,7 +895,7 @@ const styles = StyleSheet.create({
         borderRadius: 12,
     },
     actionSheetCancelText: {
-        fontSize: 17,
+        fontSize: 16,
         fontWeight: '600',
         color: '#fff',
     },

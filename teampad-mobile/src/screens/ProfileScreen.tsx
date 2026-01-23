@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     View,
     Text,
@@ -11,17 +11,21 @@ import {
     Modal,
     KeyboardAvoidingView,
     Platform,
+    Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '../api/restApi';
 import { useAuth } from '../context/AuthContext';
 import { haptics } from '../utils/haptics';
+import { BackgroundGlow } from '../components/BackgroundGlow';
+import { createSlideUp, getAnimatedStyle } from '../utils/animations';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AppStackParamList } from '../navigation';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'Profile'>;
 
 export function ProfileScreen({ navigation }: Props) {
+    const introAnim = useRef(createSlideUp(260, 12)).current;
     const insets = useSafeAreaInsets();
     const { user, refresh, logout } = useAuth();
     const [showEditModal, setShowEditModal] = useState(false);
@@ -64,8 +68,14 @@ export function ProfileScreen({ navigation }: Props) {
             .slice(0, 2);
     };
 
+    useEffect(() => {
+        introAnim.start();
+    }, [introAnim]);
+
     return (
         <View style={styles.container}>
+            <BackgroundGlow tint="blue" />
+            <Animated.View style={[styles.content, getAnimatedStyle(introAnim.opacity, introAnim.translateY)]}>
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
                 <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
@@ -75,7 +85,7 @@ export function ProfileScreen({ navigation }: Props) {
                 <View style={styles.headerRight} />
             </View>
 
-            <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+            <ScrollView style={styles.scroll} contentContainerStyle={styles.contentContainer}>
                 {/* Avatar Section */}
                 <View style={styles.avatarSection}>
                     <View style={styles.avatar}>
@@ -226,6 +236,7 @@ export function ProfileScreen({ navigation }: Props) {
                     </View>
                 </View>
             </Modal>
+            </Animated.View>
         </View>
     );
 }
@@ -234,6 +245,10 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#0a0a0a',
+    },
+    content: {
+        flex: 1,
+        zIndex: 1,
     },
     header: {
         flexDirection: 'row',
@@ -245,11 +260,17 @@ const styles = StyleSheet.create({
         borderBottomColor: '#1a1a1a',
     },
     backButton: {
-        padding: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+        backgroundColor: '#141414',
+        borderWidth: 1,
+        borderColor: '#262626',
     },
     backText: {
-        color: '#3b82f6',
-        fontSize: 16,
+        color: '#dbeafe',
+        fontSize: 14,
+        fontWeight: '600',
     },
     headerTitle: {
         fontSize: 18,
@@ -259,7 +280,7 @@ const styles = StyleSheet.create({
     headerRight: {
         width: 60,
     },
-    content: {
+    scroll: {
         flex: 1,
     },
     contentContainer: {
@@ -279,7 +300,7 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     avatarText: {
-        fontSize: 36,
+        fontSize: 32,
         fontWeight: '600',
         color: '#fff',
     },
@@ -290,7 +311,7 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     userEmail: {
-        fontSize: 15,
+        fontSize: 14,
         color: '#888',
     },
     section: {
@@ -316,7 +337,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     infoLabel: {
-        fontSize: 13,
+        fontSize: 12,
         color: '#666',
         marginBottom: 4,
     },
@@ -368,7 +389,7 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     modalSubtitle: {
-        fontSize: 15,
+        fontSize: 14,
         color: '#888',
         textAlign: 'center',
         marginBottom: 24,
@@ -398,7 +419,7 @@ const styles = StyleSheet.create({
     },
     modalCancelText: {
         color: '#888',
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: '600',
     },
     modalSaveButton: {
@@ -410,7 +431,7 @@ const styles = StyleSheet.create({
     },
     modalSaveText: {
         color: '#fff',
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: '600',
     },
     buttonDisabled: {
@@ -438,7 +459,7 @@ const styles = StyleSheet.create({
     },
     logoutConfirmText: {
         color: '#fff',
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: '600',
     },
 });

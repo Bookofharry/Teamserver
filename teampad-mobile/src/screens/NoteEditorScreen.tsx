@@ -251,12 +251,17 @@ const styles = StyleSheet.create({
         paddingBottom: 12,
     },
     backButton: {
-        padding: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+        backgroundColor: '#141414',
+        borderWidth: 1,
+        borderColor: '#262626',
     },
     backText: {
-        color: '#3b82f6',
-        fontSize: 16,
-        fontWeight: '500',
+        color: '#dbeafe',
+        fontSize: 14,
+        fontWeight: '600',
     },
     headerRight: {
         flexDirection: 'row',
@@ -362,7 +367,7 @@ const styles = StyleSheet.create({
     },
     deleteCancelText: {
         color: '#888',
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: '600',
     },
     deleteConfirmButton: {
@@ -374,7 +379,7 @@ const styles = StyleSheet.create({
     },
     deleteConfirmText: {
         color: '#fff',
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: '600',
     },
     buttonDisabled: {
